@@ -1,0 +1,2441 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,user-scalable=no">
+<title>ラクガキバトラーズ（試作版）</title>
+<link href="https://fonts.googleapis.com/css2?family=Yusei+Magic&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/peerjs/1.5.2/peerjs.min.js"></script>
+<style>
+:root{
+  --ink:#2b2b2b; --paper:#fdf8ec; --accent:#e74c3c; --blue:#2980d9;
+}
+*{box-sizing:border-box; -webkit-tap-highlight-color:transparent;}
+body{
+  margin:0; font-family:'Yusei Magic','Hiragino Maru Gothic ProN',sans-serif;
+  color:var(--ink);
+  background:var(--paper);
+  background-image:linear-gradient(rgba(41,128,217,.07) 1px, transparent 1px);
+  background-size:100% 28px;
+  min-height:100vh; display:flex; justify-content:center;
+}
+#app{width:100%; max-width:560px; padding:12px;}
+.screen{display:none;}
+.screen.active{display:block; animation:pop .25s ease;}
+@keyframes pop{from{transform:scale(.97); opacity:0} to{transform:scale(1); opacity:1}}
+h1{text-align:center; font-size:32px; margin:24px 0 4px; letter-spacing:2px; text-shadow:2px 2px 0 #f5d90a;}
+.langrow{display:flex; gap:6px; justify-content:center; flex-wrap:wrap; margin-bottom:14px;}
+.langbtn{font-size:13px; padding:6px 12px;}
+.langbtn.sel{background:#f5d90a;}
+h2{text-align:center; font-size:22px; margin:10px 0 2px;}
+.subtitle{text-align:center; font-size:13px; opacity:.7; margin-bottom:16px;}
+.wobble{
+  border:3px solid var(--ink);
+  border-radius:255px 15px 225px 15px / 15px 225px 15px 255px;
+  background:#fff; padding:14px; margin-bottom:12px;
+}
+button{
+  font-family:inherit; font-size:16px; color:var(--ink);
+  background:#fff; border:3px solid var(--ink); padding:10px 18px;
+  border-radius:255px 15px 225px 15px / 15px 225px 15px 255px;
+  cursor:pointer; transition:transform .08s;
+}
+button:active{transform:scale(.95);}
+button:disabled{opacity:.4; pointer-events:none;}
+button.primary{background:#f5d90a; font-size:19px; padding:13px 26px;}
+.center{text-align:center;}
+.badge{display:inline-block; background:var(--ink); color:#fff; border-radius:10px; padding:2px 10px; font-size:13px;}
+/* ===== deck ===== */
+#deck-grid{display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-bottom:14px;}
+.slot{
+  border:3px solid var(--ink); border-radius:14px; background:#fff; padding:8px; text-align:center;
+  cursor:pointer; position:relative;
+}
+.slot.done{cursor:pointer;}
+.slot .editmark{position:absolute; bottom:34px; right:6px; font-size:14px; background:#fff; border:2px solid var(--ink); border-radius:8px; padding:0 4px; z-index:1;}
+.slot img{width:100%; aspect-ratio:1; background:#fff; border:2px dashed #ccc; border-radius:8px; display:block;}
+.slot .empty-box{
+  width:100%; aspect-ratio:1; border:2px dashed #bbb; border-radius:8px;
+  display:flex; align-items:center; justify-content:center; font-size:30px; color:#bbb;
+}
+.slot .tier{position:absolute; top:4px; left:6px; z-index:1;}
+.slot .ttype{position:absolute; top:4px; right:6px; font-size:22px; z-index:1;}
+.slot .stats{font-size:11px; margin-top:4px; line-height:1.5;}
+/* ===== draw ===== */
+#draw-header{display:flex; justify-content:space-between; align-items:center; margin-bottom:6px; flex-wrap:wrap; gap:4px;}
+#draw-msg{font-size:13px; min-height:20px; margin-bottom:6px;}
+#timer-row{display:flex; align-items:center; gap:8px; margin-bottom:8px;}
+#timer-wrap{flex:1; height:14px; border:2px solid var(--ink); border-radius:8px; overflow:hidden; background:#fff;}
+#timer-bar{height:100%; width:100%; background:linear-gradient(90deg,#27ae60,#f5d90a);}
+#time-text{font-size:15px; min-width:52px; text-align:right;}
+#paint{
+  width:100%; touch-action:none; display:block; background:#fff;
+  border:3px solid var(--ink);
+  border-radius:15px 255px 15px 225px / 225px 15px 255px 15px;
+  cursor:crosshair;
+}
+#tools{display:flex; gap:6px; margin:8px 0; flex-wrap:wrap; align-items:center;}
+.tool{width:44px; height:44px; padding:0; font-size:18px; display:flex; align-items:center; justify-content:center;}
+.tool.sel{background:#f5d90a; transform:scale(1.08);}
+#palette{display:flex; gap:6px; flex-wrap:wrap; margin-bottom:10px;}
+.swatch{
+  width:34px; height:34px; border-radius:50% 40% 55% 45%; border:3px solid var(--ink); cursor:pointer;
+}
+.swatch.sel{outline:3px dashed var(--ink); outline-offset:2px;}
+/* ===== battle ===== */
+#battle-top{display:flex; justify-content:space-between; font-size:14px; margin-bottom:6px;}
+#arena{display:flex; gap:10px; margin-bottom:6px;}
+.fighter{flex:1; text-align:center; padding:6px; position:relative; margin-bottom:0;}
+.fighter canvas{width:100%; aspect-ratio:1; display:block; background:#fff;}
+.fighter .ftype{position:absolute; top:2px; right:6px; font-size:24px; z-index:1;}
+.fname{font-size:13px; margin:4px 0 0; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;}
+.fcond{font-size:11px; min-height:15px; margin:0 0 2px; color:#8e44ad;}
+.hpbar{height:12px; border:2px solid var(--ink); border-radius:6px; background:#fff; overflow:hidden;}
+.hpfill{height:100%; background:#27ae60; width:100%; transition:width .4s;}
+.hpnum{font-size:12px;}
+.bench{display:flex; gap:4px; margin-bottom:6px; justify-content:center;}
+.bench .bm{
+  width:40px; height:40px; border:2px solid var(--ink); border-radius:8px; background:#fff;
+  position:relative; overflow:hidden;
+}
+.bench .bm img{width:100%; height:100%;}
+.bench .bm.active{outline:3px solid #f5d90a;}
+.bench .bm.ko{opacity:.3;}
+.bench .bm.ko::after{content:'✖'; position:absolute; inset:0; display:flex; align-items:center; justify-content:center; color:var(--accent); font-size:20px;}
+.shake{animation:shake .35s;}
+@keyframes shake{0%,100%{transform:translate(0)}20%{transform:translate(-6px,2px) rotate(-2deg)}40%{transform:translate(5px,-2px)}60%{transform:translate(-4px,1px) rotate(2deg)}80%{transform:translate(3px,-1px)}}
+#hint{min-height:20px; font-size:13px; text-align:center; margin-bottom:6px; opacity:.85;}
+#actions{display:grid; grid-template-columns:1fr 1fr; gap:6px; margin-bottom:6px;}
+#actions button{padding:8px 4px; font-size:13px; line-height:1.25;}
+#actions small{display:block; font-size:9px; opacity:.65;}
+#switch-row{margin-bottom:8px;}
+#switch-row button{width:100%; padding:8px 4px; font-size:13px;}
+#blog{
+  height:96px; overflow-y:auto; font-size:13px; line-height:1.6;
+  background:#fff; border:3px solid var(--ink); border-radius:12px; padding:8px 10px;
+}
+#blog div{border-bottom:1px dashed #ccc;}
+/* ===== overlays ===== */
+.ovl{
+  position:fixed; inset:0; background:rgba(43,43,43,.55); display:none;
+  align-items:center; justify-content:center; z-index:10;
+}
+.ovl.show{display:flex;}
+.ovl-box{max-width:420px; width:90%; text-align:center; background:var(--paper); padding:22px 16px; max-height:90vh; overflow-y:auto;}
+#overlay-big{font-size:34px; margin:0 0 8px; letter-spacing:2px;}
+#overlay-text{font-size:15px; margin-bottom:16px; line-height:1.8;}
+#overlay-img{width:140px; aspect-ratio:1; background:#fff; border:3px solid var(--ink); border-radius:12px; display:none; margin:0 auto 10px;}
+#bench-grid{display:grid; grid-template-columns:1fr 1fr 1fr; gap:8px; margin-bottom:12px;}
+#bench-grid .slot{padding:4px;}
+#bench-grid .slot .stats{font-size:10px;}
+.statline{display:flex; justify-content:space-between; max-width:250px; margin:0 auto; font-size:15px;}
+.movelist{text-align:left; max-width:280px; margin:8px auto 0; font-size:13px; line-height:1.7;}
+.movelist small{opacity:.65;}
+</style>
+</head>
+<body>
+<div id="app">
+
+  <!-- タイトル -->
+  <div id="title-screen" class="screen active">
+    <h1>ラクガキバトラーズ</h1>
+    <div class="subtitle" id="subtitle-el">〜 描いた6体でデッキバトル 〜（試作版）</div>
+    <div class="langrow">
+      <button class="langbtn" data-lang="en" onclick="setLang('en')">English</button>
+      <button class="langbtn sel" data-lang="ja" onclick="setLang('ja')">日本語</button>
+      <button class="langbtn" data-lang="zh" onclick="setLang('zh')">中文</button>
+      <button class="langbtn" data-lang="ko" onclick="setLang('ko')">한국어</button>
+      <button class="langbtn" data-lang="de" onclick="setLang('de')">Deutsch</button>
+    </div>
+    <div class="wobble" style="font-size:14px; line-height:1.9;" id="rules-box"></div>
+    <div class="center" style="margin-top:16px;">
+      <button class="primary" id="mkdeck-btn" onclick="show('deck-screen'); renderDeck();">✏️ デッキをつくる</button>
+    </div>
+  </div>
+
+  <!-- デッキ編成 -->
+  <div id="deck-screen" class="screen">
+    <h2 id="deck-h2">デッキをつくろう</h2>
+    <div class="subtitle" id="deck-sub">スロットをタップ→描く or ストックから選ぶ。各時間5体までストックできるよ</div>
+    <div id="deck-grid"></div>
+    <div class="center" style="display:flex; gap:8px; justify-content:center; flex-wrap:wrap;">
+      <button class="primary" id="battle-btn" onclick="startBattle()" disabled>⚔️ AI対戦</button>
+      <button id="free-btn" onclick="startOnline('free')" disabled>🌐 フリー対戦</button>
+      <button id="friend-btn" onclick="startOnline('friend')" disabled>🤝 友人対戦</button>
+      <button id="reset-btn" onclick="resetDeck()">🗑️ 全ストック削除</button>
+    </div>
+  </div>
+
+  <!-- お絵描き -->
+  <div id="draw-screen" class="screen">
+    <div id="draw-header">
+      <span class="badge" id="draw-tier">3分モンスター</span>
+      <span id="draw-stats" style="font-size:12px;"></span>
+    </div>
+    <div id="draw-msg"></div>
+    <div id="timer-row">
+      <div id="timer-wrap"><div id="timer-bar"></div></div>
+      <div id="time-text">0:00</div>
+    </div>
+    <canvas id="paint" width="400" height="400"></canvas>
+    <div id="tools">
+      <button class="tool sel" data-size="5" title="細筆">✏️</button>
+      <button class="tool" data-size="12" title="中筆">🖊️</button>
+      <button class="tool" data-size="26" title="太筆">🖌️</button>
+      <button class="tool" data-size="-1" title="消しゴム">🧽</button>
+      <button class="tool" data-size="-2" title="塗りつぶし">🪣</button>
+      <button class="tool" id="undo-btn" title="ひとつ戻す">↩️</button>
+    </div>
+    <div id="palette"></div>
+    <div class="center"><button class="primary" id="done-btn" onclick="finishDrawing()">かんせい！</button></div>
+  </div>
+
+  <!-- バトル -->
+  <div id="battle-screen" class="screen">
+    <div id="battle-top">
+      <span class="badge" id="b-score-p">きみ 6/6</span>
+      <span class="badge" id="b-score-e">あいて 6/6</span>
+    </div>
+    <div class="bench" id="p-bench"></div>
+    <div id="arena">
+      <div class="fighter wobble" id="f-player">
+        <span class="ftype" id="p-type"></span>
+        <canvas id="p-img" width="400" height="400"></canvas>
+        <div class="fname" id="p-name"></div>
+        <div class="fcond" id="p-cond"></div>
+        <div class="hpbar"><div class="hpfill" id="p-hp"></div></div>
+        <div class="hpnum" id="p-hpnum"></div>
+      </div>
+      <div class="fighter wobble" id="f-enemy">
+        <span class="ftype" id="e-type"></span>
+        <canvas id="e-img" width="400" height="400"></canvas>
+        <div class="fname" id="e-name">???</div>
+        <div class="fcond" id="e-cond"></div>
+        <div class="hpbar"><div class="hpfill" id="e-hp"></div></div>
+        <div class="hpnum" id="e-hpnum"></div>
+      </div>
+    </div>
+    <div class="bench" id="e-bench"></div>
+    <div id="hint"></div>
+    <div id="actions"></div>
+    <div id="switch-row"><button id="switch-btn" onclick="openBench('switch')">🔄 こうたい（ターンを消費する）</button></div>
+    <div id="blog"></div>
+  </div>
+
+  <!-- 結果／ステータス発表オーバーレイ -->
+  <div id="overlay" class="ovl">
+    <div class="ovl-box wobble">
+      <canvas id="overlay-img" width="400" height="400"></canvas>
+      <div id="overlay-big"></div>
+      <div id="overlay-text"></div>
+      <button class="primary" id="overlay-btn">つぎへ</button>
+      <button id="overlay-btn2" style="display:none;">…</button>
+    </div>
+  </div>
+
+  <!-- ベンチ（先発／こうたい／強制交代）オーバーレイ -->
+  <div id="bench-overlay" class="ovl">
+    <div class="ovl-box wobble">
+      <div id="bench-title" style="font-size:18px; margin-bottom:10px;">だれを出す？</div>
+      <div id="bench-grid"></div>
+      <button id="bench-cancel" onclick="closeBench()">やめる</button>
+    </div>
+  </div>
+
+  <!-- 友人対戦：あいことば入力 -->
+  <div id="word-overlay" class="ovl">
+    <div class="ovl-box wobble">
+      <div style="font-size:18px; margin-bottom:8px;" id="friend-title">🤝 友人対戦</div>
+      <div style="font-size:13px; margin-bottom:10px;" id="friend-text">友だちと同じ<b>あいことば</b>を入力してね</div>
+      <input id="word-input" maxlength="20" placeholder="あいことば"
+        onkeydown="if(event.key==='Enter')submitWord()"
+        style="font-family:inherit; font-size:16px; padding:8px 12px; border:3px solid var(--ink); border-radius:10px; width:80%; margin-bottom:12px;">
+      <div style="display:flex; gap:8px; justify-content:center;">
+        <button class="primary" id="connect-btn" onclick="submitWord()">せつぞく！</button>
+        <button id="word-quit" onclick="document.getElementById('word-overlay').classList.remove('show')">やめる</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 通信ステータス -->
+  <div id="net-overlay" class="ovl">
+    <div class="ovl-box wobble">
+      <div id="net-text" style="font-size:15px; margin-bottom:14px; line-height:1.8;">…</div>
+      <button id="net-cancel">キャンセル</button>
+    </div>
+  </div>
+
+  <!-- ストック一覧（ティアごと最大5体） -->
+  <div id="stock-overlay" class="ovl">
+    <div class="ovl-box wobble">
+      <div id="stock-title" style="font-size:18px; margin-bottom:10px;">📦 ストック</div>
+      <div id="stock-grid" style="display:grid; grid-template-columns:1fr 1fr 1fr; gap:8px; margin-bottom:12px;"></div>
+      <button id="stock-close" onclick="closeStockOverlay()">とじる</button>
+    </div>
+  </div>
+
+  <!-- モンスター操作メニュー -->
+  <div id="edit-overlay" class="ovl">
+    <div class="ovl-box wobble">
+      <div id="edit-title" style="font-size:18px; margin-bottom:12px;">✏️ このモンスターをどうする？</div>
+      <div style="display:flex; flex-direction:column; gap:8px; align-items:stretch;">
+        <button class="primary" id="menu-select" onclick="selectMon()">⭐ デッキに入れる</button>
+        <button id="menu-edit" onclick="editSlot(true)">✏️ 描き足し・修正する<br><small style="font-size:11px; opacity:.65;">今の絵の続きから（インク時間は全回復）</small></button>
+        <button id="menu-redraw" onclick="editSlot(false)">🎨 まっさらから描き直す</button>
+        <button id="menu-rename" onclick="renameMon()">📛 名前を変える</button>
+        <button id="menu-delete" onclick="deleteSlot()">🗑️ この1体を削除する</button>
+        <button id="menu-back" onclick="closeEditMenu()">もどる</button>
+      </div>
+      <div style="font-size:11px; opacity:.65; margin-top:10px;" id="edit-note">※編集して完成させるとステータス・タイプ・技は決め直されるよ</div>
+    </div>
+  </div>
+
+  <!-- 汎用ピッカー（強奪・入れ替え） -->
+  <div id="pick-overlay" class="ovl">
+    <div class="ovl-box wobble">
+      <div id="pick-title" style="font-size:18px; margin-bottom:10px;">えらぼう</div>
+      <div id="pick-grid" style="display:grid; grid-template-columns:1fr 1fr 1fr; gap:8px; margin-bottom:12px;"></div>
+      <button id="pick-cancel">やめる</button>
+    </div>
+  </div>
+
+</div>
+<script>
+'use strict';
+/* ============ 定数 ============ */
+const PALETTE = [
+  {hex:'#2b2b2b', name:'くろ'},
+  {hex:'#e74c3c', name:'あか'},
+  {hex:'#2980d9', name:'あお'},
+  {hex:'#27ae60', name:'みどり'},
+  {hex:'#f39c12', name:'オレンジ'},
+  {hex:'#8e44ad', name:'むらさき'},
+  {hex:'#e91e8c', name:'ピンク'},
+  {hex:'#f5d90a', name:'きいろ'},
+  {hex:'#00bcd4', name:'みずいろ'},
+  {hex:'#795548', name:'ちゃいろ'},
+];
+PALETTE.forEach(p=>{
+  p.rgb = [parseInt(p.hex.slice(1,3),16), parseInt(p.hex.slice(3,5),16), parseInt(p.hex.slice(5,7),16)];
+});
+/* ============ 多言語対応 ============ */
+let LANG = 'ja';
+const I18N = {
+ja:{
+  subtitle:'〜 描いた6体でデッキバトル 〜（試作版）',
+  rules:'✏️ <b>3分・6分・10分・12分・16分・20分</b>、各時間で1体ずつ、計6体を描く！<br>🎲 ステータスは時間ごとの<b>範囲内でランダム付与</b>。絵の見た目が傾向を決める！<br>🎨 タイプ（🔥💧🌿🌑✨）と<b>4つの技</b>も絵とステータスから自動で決まる！<br>💨 素早いモンスターは<b>先手</b>を取り、攻撃を<b>かわす</b>こともある！<br>🌐 オンラインは<b>フリー対戦</b>と<b>友人対戦（あいことば）</b>の2種類！<br>📦 各時間<b>5体までストック</b>OK（自動セーブ）。オンラインで勝てば<b>相手のモンスターを1体うばえる</b>…！',
+  mkdeck:'✏️ デッキをつくる', deckTitle:'デッキをつくろう',
+  deckSub:'スロットをタップ→描く or ストックから選ぶ。各時間5体までストックできるよ',
+  btnAI:'⚔️ AI対戦', btnFree:'🌐 フリー対戦', btnFriend:'🤝 友人対戦', btnReset:'🗑️ 全ストック削除',
+  confirmReset:'全ティアのストックをぜんぶ削除する？（もどせないよ）',
+  drawTier:'{min}分モンスター',
+  drawMsg:'✏️ インク時間{min}分（ペンを動かしている間だけ減る）。絵の見た目でステータス傾向・タイプ・技が決まるよ！',
+  btnDone:'かんせい！', tipStock:'（タップでストックを開く）',
+  stockOf:'📦 {min}分モンスターのストック（{n}/{max}）', newDraw:'あたらしく描く', inDeck:'⭐デッキ中',
+  editTitle:'✏️「{n}」をどうする？', menuSelect:'⭐ デッキに入れる',
+  menuEdit:'✏️ 描き足し・修正する', menuEditSub:'今の絵の続きから（インク時間は全回復）',
+  menuRedraw:'🎨 まっさらから描き直す', menuRename:'📛 名前を変える', menuDelete:'🗑️ この1体を削除する', menuBack:'もどる',
+  editNote:'※編集して完成させるとステータス・タイプ・技は決め直されるよ',
+  renamePrompt:'あたらしい名前は？（14文字まで）', stockClose:'とじる',
+  benchStarter:'先発モンスターを選ぼう！', benchForced:'つぎのモンスターを選ぼう！', benchSwitch:'だれとこうたいする？', benchCancel:'やめる',
+  timeLeft:'のこり{s}秒', autoPick:'⏰ 時間切れ！自動で選ばれた！',
+  scoreYou:'きみ {n}/6', scoreOpp:'あいて {n}/6', nameMin:'{n}（{min}分）',
+  btnSwitch:'🔄 こうたい（ターンを消費する）',
+  hint_atk:'👀 {n} から殺気を感じる…！', hint_def:'👀 {n} は身構えているようだ…', hint_heal:'👀 {n} は傷を気にしている…',
+  hint_buff:'👀 {n} は力を溜めたそうにしている…', hint_debuff:'👀 {n} がいやらしい目でこちらを見ている…', hint_status:'👀 {n} があやしい動きをしている…',
+  waitAct:'⌛ あいての行動を待っています…', waitStarter:'⌛ あいての先発を待っています…', waitSwap:'⌛ あいての交代を待っています…', whatDo:'どうする？',
+  desc_atk:'威力{p}', desc_acc:'・命中{a}%', desc_def:'このターン被ダメ大幅減＋反撃', desc_heal:'HP35%回復（のこり{n}回）',
+  desc_buff:'自分の{s}を上げる', desc_debuff:'相手の{s}を下げる', desc_status:'相手を{k}にする',
+  type0:'ほのお', type1:'みず', type2:'くさ', type3:'やみ', type4:'ひかり',
+  stat_atk:'こうげき', stat_def:'ぼうぎょ', stat_spd:'すばやさ',
+  kind_poison:'どく', kind_burn:'やけど', kind_para:'まひ',
+  mult_sup:'　こうかはばつぐんだ！', mult_weak:'　いまひとつ…',
+  para_cant:'⚡ {n}は しびれてうごけない！', def_use:'🛡️ {n}は {m}で身をかためた！',
+  atk_miss:'💫 {n}の{m}！ しかしはずれた！', atk_blocked:'🛡️ {f}は防御！ {n}の{m}を{d}に抑えて{c}反撃！',
+  atk_dodge:'💨 {n}の{m}！ しかし{f}はひらりとかわした！', atk_hit:'⚔️ {n}の{m}！ {d}ダメージ！{x}',
+  heal_empty:'…{n}の{m}は もう使えない！', heal_use:'💚 {n}の{m}！ HPが{d}回復！（のこり{u}回）',
+  buff_max:'…{n}の{s}は もう上がらない！', buff_use:'⬆️ {n}の{m}！ {s}があがった！',
+  debuff_miss:'💫 {n}の{m}！ しかしうまく決まらなかった！', debuff_floor:'…しかし{f}の{s}は もう下がらない！', debuff_use:'⬇️ {n}の{m}！ {f}の{s}がさがった！',
+  st_already:'…{n}の{m}！ しかし{f}にはすでに効果がかかっている！', st_miss:'💫 {n}の{m}！ しかしかわされた！', st_apply:'{i} {n}の{m}！ {f}は{k}状態になった！',
+  dot_poison:'🟣 {n}は どくで{d}ダメージ…', dot_burn:'🔥 {n}は やけどで{d}ダメージ…', st_cured:'✨ {n}の{k}がなおった！',
+  ko_enemy:'💥 {n} をたおした！', ko_mine:'💔 {n} はたおれた…', ko_pvp:'💥 {n} はたおれた！',
+  send_next:'👾 あいては {n}（{min}分）をくり出した！', send_next2:'👾 あいては {n} をくり出した！',
+  go_mon:'🎬 いけ、{n}！', turn_header:'▶ {a}：{x}　／　{b}：{y}',
+  battle_start:'⚔️ バトル開始！ 先発モンスターを選ぼう。',
+  switch_self:'🔄 こうたい！ いけ、{n}！', switch_opp:'🔄 あいてはこうたい！ {n}が出てきた！',
+  pvp_start:'🌐 オンライン対戦スタート！（きみ＝{t}）', opp_starter:'👾 あいての先発は {n}！',
+  revType:'{i} {t}タイプ！', learned:'おぼえた技：', backDeck:'デッキにもどる', nameLabel:'📛 なまえ：',
+  reason_hp:'どっしり大きな絵！ → 体力寄りに育った', reason_atk:'赤くて攻撃的な絵！ → 攻撃寄りに育った',
+  reason_def:'みっちり塗られて固そう！ → 防御寄りに育った', reason_spd:'軽やかで素早そうな絵！ → 素早さ寄りに育った',
+  reason_blank:'まっしろ…なぞのモンスターだ',
+  statL_hp:'❤️体力', statL_atk:'⚔️攻撃力', statL_def:'🛡️防御力', statL_spd:'💨素早さ',
+  winTitle:'🎉 WIN!', winText:'あいてのデッキを全滅させた！<br>のこりモンスター：<b>{n}体</b>',
+  btnRematch:'⚔️ 同じデッキで再戦', btnNewDeck:'✏️ 新しいデッキ',
+  loseTitle:'💀 LOSE…', loseText:'デッキが全滅した…<br>タイプ相性・技・こうたいを見直してみよう。',
+  pvpWinText:'あいてのデッキを全滅させた！<br>ごほうびに<b>あいてのモンスターを1体</b>うばえる！', btnSteal:'😈 うばうモンスターを選ぶ',
+  loseWaitSteal:'💀 まけた…<br>あいてが<b>うばうモンスター</b>を選んでいる…',
+  stealTitle:'😈 どのモンスターをうばう？', mercyBtn:'😇 うばわない（なさけ）',
+  mercyTitle:'😇 なさけ', mercyText1:'何もうばわずに勝ち名乗りだけ上げた。かっこいい…！', mercyText2:'入れ替えを惜しんで、何もうばわなかった。',
+  replaceFull:'📦 {min}分ストックがいっぱい！どれと入れ替える？', replaceCancel:'うばうのをやめる',
+  gotTitle:'🎁 ゲット！', gotText:'「{n}」をうばった！<br>{min}分ストックに追加したよ。',
+  stolenTitle:'💔 うばわれた…', stolenText:'「{n}」があいての手に渡ってしまった…<br>また描いて取り返そう！',
+  safeTitle:'😇 セーフ！', safeText:'あいては何もうばわずに去っていった…！<br>デッキは無事だ。',
+  netLoadFail:'オンライン機能の読み込みに失敗…<br>ネット接続を確認してリロードしてね', closeBtn:'閉じる', cancelBtn:'キャンセル',
+  connWord:'🤝 あいことば「{w}」で接続中…', searching:'🌐 フリー対戦のあいてを探しています…',
+  roomWait:'🛋️ へやを作った！あいてを待っています…<br><small>この画面のまま待っててね</small>',
+  found:'✅ あいてが見つかった！デッキ交換中…', notFound:'あいてが見つからなかった…<br>もういちど試してみてね',
+  dropTitle:'⚠️ 通信エラー', dropText:'あいてとの接続が切れてしまった…',
+  friendTitle:'🤝 友人対戦', friendText:'友だちと同じ<b>あいことば</b>を入力してね',
+  wordPh:'あいことば', connectBtn:'せつぞく！', quitBtn:'やめる',
+  defaultName:'{min}分のラクガキ', defaultNameN:'{min}分のラクガキ{n}ごう',
+  nameA:['モ','ギャ','ズン','ピ','ドロ','ベロ','グラ','ケケ','ボン','ムニ','ザラ','ペチ'],
+  nameB:['ちゃん','ぞう','りん','ゴン','ペン','たろう','キング','じい','まる','ヌス'],
+},
+en:{
+  subtitle:'~ Battle with 6 doodles of your own ~ (Prototype)',
+  rules:'✏️ Draw one monster each at <b>3, 6, 10, 12, 16 & 20 minutes</b> — 6 in total!<br>🎲 Stats roll randomly <b>within each time tier\'s range</b>. Your art shapes the tendency!<br>🎨 Type (🔥💧🌿🌑✨) and <b>4 moves</b> are auto-assigned from your art & stats!<br>💨 Fast monsters <b>strike first</b> and sometimes <b>dodge</b>!<br>🌐 Online: <b>Random Match</b> or <b>Friend Match (passphrase)</b>!<br>📦 Stock up to <b>5 per tier</b> (auto-saved). Win online to <b>steal one of your rival\'s monsters</b>…!',
+  mkdeck:'✏️ Build a Deck', deckTitle:'Build Your Deck',
+  deckSub:'Tap a slot → draw, or pick from stock. Up to 5 per tier!',
+  btnAI:'⚔️ VS AI', btnFree:'🌐 Random Match', btnFriend:'🤝 Friend Match', btnReset:'🗑️ Delete All Stock',
+  confirmReset:'Delete ALL stocked monsters? (Cannot be undone)',
+  drawTier:'{min}-min Monster',
+  drawMsg:'✏️ {min} min of ink time (only ticks while your pen moves). Your art decides stat tendency, type & moves!',
+  btnDone:'Done!', tipStock:'(tap to open stock)',
+  stockOf:'📦 {min}-min Monster Stock ({n}/{max})', newDraw:'Draw a new one', inDeck:'⭐In deck',
+  editTitle:'✏️ What to do with "{n}"?', menuSelect:'⭐ Put in deck',
+  menuEdit:'✏️ Edit / add to it', menuEditSub:'Continue from current art (ink time refilled)',
+  menuRedraw:'🎨 Redraw from scratch', menuRename:'📛 Rename', menuDelete:'🗑️ Delete this one', menuBack:'Back',
+  editNote:'*Finishing an edit re-rolls stats, type & moves',
+  renamePrompt:'New name? (max 14 chars)', stockClose:'Close',
+  benchStarter:'Choose your starter!', benchForced:'Choose your next monster!', benchSwitch:'Switch with whom?', benchCancel:'Cancel',
+  timeLeft:'{s}s left', autoPick:'⏰ Time\'s up! Auto-picked!',
+  scoreYou:'You {n}/6', scoreOpp:'Rival {n}/6', nameMin:'{n} ({min}m)',
+  btnSwitch:'🔄 Switch (uses your turn)',
+  hint_atk:'👀 {n} is radiating bloodlust…!', hint_def:'👀 {n} seems to be bracing…', hint_heal:'👀 {n} is checking its wounds…',
+  hint_buff:'👀 {n} looks eager to power up…', hint_debuff:'👀 {n} is eyeing you nastily…', hint_status:'👀 {n} is moving suspiciously…',
+  waitAct:'⌛ Waiting for your rival\'s move…', waitStarter:'⌛ Waiting for rival\'s starter…', waitSwap:'⌛ Waiting for rival\'s switch…', whatDo:'What will you do?',
+  desc_atk:'Power {p}', desc_acc:' · Acc {a}%', desc_def:'Greatly cut damage & counter this turn', desc_heal:'Heal 35% HP ({n} left)',
+  desc_buff:'Raise your {s}', desc_debuff:'Lower foe\'s {s}', desc_status:'Inflict {k} on foe',
+  type0:'Fire', type1:'Water', type2:'Grass', type3:'Dark', type4:'Light',
+  stat_atk:'Attack', stat_def:'Defense', stat_spd:'Speed',
+  kind_poison:'Poison', kind_burn:'Burn', kind_para:'Paralysis',
+  mult_sup:' It\'s super effective!', mult_weak:' Not very effective…',
+  para_cant:'⚡ {n} is paralyzed and can\'t move!', def_use:'🛡️ {n} braces with {m}!',
+  atk_miss:'💫 {n}\'s {m}! But it missed!', atk_blocked:'🛡️ {f} blocked! {n}\'s {m} dealt only {d}, countered for {c}!',
+  atk_dodge:'💨 {n}\'s {m}! But {f} dodged!', atk_hit:'⚔️ {n}\'s {m}! {d} damage!{x}',
+  heal_empty:'…{n}\'s {m} is used up!', heal_use:'💚 {n}\'s {m}! Recovered {d} HP! ({u} left)',
+  buff_max:'…{n}\'s {s} won\'t go higher!', buff_use:'⬆️ {n}\'s {m}! {s} rose!',
+  debuff_miss:'💫 {n}\'s {m}! But it failed!', debuff_floor:'…but {f}\'s {s} won\'t go lower!', debuff_use:'⬇️ {n}\'s {m}! {f}\'s {s} fell!',
+  st_already:'…{n}\'s {m}! But {f} is already afflicted!', st_miss:'💫 {n}\'s {m}! But it was evaded!', st_apply:'{i} {n}\'s {m}! {f} got {k}!',
+  dot_poison:'🟣 {n} takes {d} poison damage…', dot_burn:'🔥 {n} takes {d} burn damage…', st_cured:'✨ {n} recovered from {k}!',
+  ko_enemy:'💥 {n} was defeated!', ko_mine:'💔 {n} fainted…', ko_pvp:'💥 {n} fainted!',
+  send_next:'👾 Rival sent out {n} ({min}m)!', send_next2:'👾 Rival sent out {n}!',
+  go_mon:'🎬 Go, {n}!', turn_header:'▶ {a}: {x} / {b}: {y}',
+  battle_start:'⚔️ Battle start! Choose your starter.',
+  switch_self:'🔄 Switch! Go, {n}!', switch_opp:'🔄 Rival switched! {n} came out!',
+  pvp_start:'🌐 Online battle start! (You = {t})', opp_starter:'👾 Rival\'s starter is {n}!',
+  revType:'{i} {t} type!', learned:'Moves learned:', backDeck:'Back to deck', nameLabel:'📛 Name:',
+  reason_hp:'A big hefty drawing! → Grew HP-leaning', reason_atk:'Red and aggressive! → Grew attack-leaning',
+  reason_def:'Densely painted, looks tough! → Grew defense-leaning', reason_spd:'Light and nimble-looking! → Grew speed-leaning',
+  reason_blank:'Blank white… a mysterious monster',
+  statL_hp:'❤️HP', statL_atk:'⚔️Attack', statL_def:'🛡️Defense', statL_spd:'💨Speed',
+  winTitle:'🎉 WIN!', winText:'You wiped out the rival\'s deck!<br>Monsters left: <b>{n}</b>',
+  btnRematch:'⚔️ Rematch (same deck)', btnNewDeck:'✏️ New deck',
+  loseTitle:'💀 LOSE…', loseText:'Your deck was wiped out…<br>Rethink types, moves & switching!',
+  pvpWinText:'You wiped out the rival\'s deck!<br>As a prize, <b>steal one of their monsters</b>!', btnSteal:'😈 Choose one to steal',
+  loseWaitSteal:'💀 You lost…<br>Your rival is choosing <b>which monster to steal</b>…',
+  stealTitle:'😈 Which monster to steal?', mercyBtn:'😇 Steal nothing (mercy)',
+  mercyTitle:'😇 Mercy', mercyText1:'You took nothing and just claimed victory. So cool…!', mercyText2:'Not worth a swap — you took nothing.',
+  replaceFull:'📦 {min}-min stock is full! Replace which one?', replaceCancel:'Give up stealing',
+  gotTitle:'🎁 Got it!', gotText:'You stole "{n}"!<br>Added to your {min}-min stock.',
+  stolenTitle:'💔 Stolen…', stolenText:'"{n}" now belongs to your rival…<br>Draw again and win it back!',
+  safeTitle:'😇 Safe!', safeText:'Your rival left without taking anything…!<br>Your deck is intact.',
+  netLoadFail:'Failed to load online features…<br>Check your connection and reload', closeBtn:'Close', cancelBtn:'Cancel',
+  connWord:'🤝 Connecting with passphrase "{w}"…', searching:'🌐 Searching for a random opponent…',
+  roomWait:'🛋️ Room created! Waiting for an opponent…<br><small>Keep this screen open</small>',
+  found:'✅ Opponent found! Exchanging decks…', notFound:'No opponent found…<br>Please try again',
+  dropTitle:'⚠️ Connection Error', dropText:'Lost connection to your opponent…',
+  friendTitle:'🤝 Friend Match', friendText:'Enter the same <b>passphrase</b> as your friend',
+  wordPh:'passphrase', connectBtn:'Connect!', quitBtn:'Cancel',
+  defaultName:'{min}-min Doodle', defaultNameN:'{min}-min Doodle #{n}',
+  nameA:['Mo','Gya','Zun','Pi','Dro','Bello','Gra','Keke','Bon','Muni','Zara','Pechi'],
+  nameB:['py','zo','rin','gon','pen','ster','king','ji','maru','nus'],
+},
+zh:{
+  subtitle:'～ 用亲手画的6只怪兽进行卡组对战 ～（试作版）',
+  rules:'✏️ 在<b>3、6、10、12、16、20分钟</b>各画1只，共6只！<br>🎲 属性在各时间档的<b>范围内随机赋予</b>，画风决定倾向！<br>🎨 属性类型（🔥💧🌿🌑✨）和<b>4个技能</b>由画作与属性自动决定！<br>💨 速度快的怪兽能<b>先手</b>，还可能<b>闪避</b>攻击！<br>🌐 在线对战有<b>自由匹配</b>和<b>好友对战（暗号）</b>两种！<br>📦 每档可<b>储存5只</b>（自动保存）。在线获胜可<b>夺走对手1只怪兽</b>…！',
+  mkdeck:'✏️ 组建卡组', deckTitle:'组建你的卡组',
+  deckSub:'点击格子→绘画或从库存选择。每档最多储存5只',
+  btnAI:'⚔️ 人机对战', btnFree:'🌐 自由匹配', btnFriend:'🤝 好友对战', btnReset:'🗑️ 删除全部库存',
+  confirmReset:'要删除所有库存怪兽吗？（无法恢复）',
+  drawTier:'{min}分钟怪兽',
+  drawMsg:'✏️ 墨水时间{min}分钟（仅在移动画笔时消耗）。画作决定属性倾向、类型和技能！',
+  btnDone:'完成！', tipStock:'（点击打开库存）',
+  stockOf:'📦 {min}分钟怪兽库存（{n}/{max}）', newDraw:'画一只新的', inDeck:'⭐卡组中',
+  editTitle:'✏️ 要对「{n}」做什么？', menuSelect:'⭐ 加入卡组',
+  menuEdit:'✏️ 修改・添笔', menuEditSub:'在现有画作上继续（墨水时间全恢复）',
+  menuRedraw:'🎨 从头重画', menuRename:'📛 改名', menuDelete:'🗑️ 删除这一只', menuBack:'返回',
+  editNote:'※编辑完成后将重新决定属性、类型和技能',
+  renamePrompt:'新名字？（最多14字）', stockClose:'关闭',
+  benchStarter:'选择首发怪兽！', benchForced:'选择下一只怪兽！', benchSwitch:'和谁交换？', benchCancel:'取消',
+  timeLeft:'剩{s}秒', autoPick:'⏰ 时间到！已自动选择！',
+  scoreYou:'你 {n}/6', scoreOpp:'对手 {n}/6', nameMin:'{n}（{min}分）',
+  btnSwitch:'🔄 交换（消耗回合）',
+  hint_atk:'👀 感到{n}杀气腾腾…！', hint_def:'👀 {n}似乎在防备…', hint_heal:'👀 {n}在意伤势…',
+  hint_buff:'👀 {n}好像想蓄力…', hint_debuff:'👀 {n}正不怀好意地盯着你…', hint_status:'👀 {n}动作可疑…',
+  waitAct:'⌛ 等待对手行动…', waitStarter:'⌛ 等待对手的首发…', waitSwap:'⌛ 等待对手交换…', whatDo:'怎么办？',
+  desc_atk:'威力{p}', desc_acc:'・命中{a}%', desc_def:'本回合大幅减伤并反击', desc_heal:'恢复35%HP（剩{n}次）',
+  desc_buff:'提升自己的{s}', desc_debuff:'降低对手的{s}', desc_status:'使对手{k}',
+  type0:'火', type1:'水', type2:'草', type3:'暗', type4:'光',
+  stat_atk:'攻击', stat_def:'防御', stat_spd:'速度',
+  kind_poison:'中毒', kind_burn:'灼伤', kind_para:'麻痹',
+  mult_sup:' 效果拔群！', mult_weak:' 效果不佳…',
+  para_cant:'⚡ {n}麻痹了动不了！', def_use:'🛡️ {n}用{m}固守！',
+  atk_miss:'💫 {n}的{m}！但是没打中！', atk_blocked:'🛡️ {f}防御了！{n}的{m}只造成{d}，被反击{c}！',
+  atk_dodge:'💨 {n}的{m}！但被{f}轻巧闪开了！', atk_hit:'⚔️ {n}的{m}！{d}点伤害！{x}',
+  heal_empty:'…{n}的{m}用完了！', heal_use:'💚 {n}的{m}！恢复{d}HP！（剩{u}次）',
+  buff_max:'…{n}的{s}不能再提升了！', buff_use:'⬆️ {n}的{m}！{s}提升了！',
+  debuff_miss:'💫 {n}的{m}！但是失败了！', debuff_floor:'…但{f}的{s}不能再降了！', debuff_use:'⬇️ {n}的{m}！{f}的{s}下降了！',
+  st_already:'…{n}的{m}！但{f}已有异常状态！', st_miss:'💫 {n}的{m}！但被躲开了！', st_apply:'{i} {n}的{m}！{f}{k}了！',
+  dot_poison:'🟣 {n}受到{d}点中毒伤害…', dot_burn:'🔥 {n}受到{d}点灼伤伤害…', st_cured:'✨ {n}的{k}痊愈了！',
+  ko_enemy:'💥 打倒了{n}！', ko_mine:'💔 {n}倒下了…', ko_pvp:'💥 {n}倒下了！',
+  send_next:'👾 对手派出了{n}（{min}分）！', send_next2:'👾 对手派出了{n}！',
+  go_mon:'🎬 上吧，{n}！', turn_header:'▶ {a}：{x}　／　{b}：{y}',
+  battle_start:'⚔️ 战斗开始！选择首发怪兽。',
+  switch_self:'🔄 交换！上吧，{n}！', switch_opp:'🔄 对手交换了！{n}出场了！',
+  pvp_start:'🌐 在线对战开始！（你＝{t}）', opp_starter:'👾 对手的首发是{n}！',
+  revType:'{i} {t}属性！', learned:'学会的技能：', backDeck:'返回卡组', nameLabel:'📛 名字：',
+  reason_hp:'画得又大又稳！→ 体力型', reason_atk:'红色又好斗！→ 攻击型',
+  reason_def:'涂得密实很坚固！→ 防御型', reason_spd:'轻盈灵动！→ 速度型',
+  reason_blank:'一片空白…神秘的怪兽',
+  statL_hp:'❤️体力', statL_atk:'⚔️攻击力', statL_def:'🛡️防御力', statL_spd:'💨速度',
+  winTitle:'🎉 胜利！', winText:'消灭了对手的卡组！<br>剩余怪兽：<b>{n}只</b>',
+  btnRematch:'⚔️ 同卡组再战', btnNewDeck:'✏️ 新卡组',
+  loseTitle:'💀 失败…', loseText:'卡组全灭了…<br>重新考虑属性、技能和交换吧。',
+  pvpWinText:'消灭了对手的卡组！<br>作为奖励可<b>夺走对手1只怪兽</b>！', btnSteal:'😈 选择要夺走的怪兽',
+  loseWaitSteal:'💀 输了…<br>对手正在选择<b>要夺走的怪兽</b>…',
+  stealTitle:'😈 夺走哪只怪兽？', mercyBtn:'😇 不夺取（慈悲）',
+  mercyTitle:'😇 慈悲', mercyText1:'什么都没拿，只宣告了胜利。真帅…！', mercyText2:'舍不得替换，什么都没拿。',
+  replaceFull:'📦 {min}分钟库存已满！替换哪只？', replaceCancel:'放弃夺取',
+  gotTitle:'🎁 到手！', gotText:'夺走了「{n}」！<br>已加入{min}分钟库存。',
+  stolenTitle:'💔 被夺走了…', stolenText:'「{n}」落入对手之手…<br>再画一只夺回来吧！',
+  safeTitle:'😇 平安！', safeText:'对手什么都没拿就离开了…！<br>卡组安然无恙。',
+  netLoadFail:'在线功能加载失败…<br>请检查网络并刷新', closeBtn:'关闭', cancelBtn:'取消',
+  connWord:'🤝 正在用暗号「{w}」连接…', searching:'🌐 正在寻找随机对手…',
+  roomWait:'🛋️ 房间已创建！等待对手…<br><small>请保持此画面</small>',
+  found:'✅ 找到对手！交换卡组中…', notFound:'没有找到对手…<br>请再试一次',
+  dropTitle:'⚠️ 通信错误', dropText:'与对手的连接断开了…',
+  friendTitle:'🤝 好友对战', friendText:'输入和朋友相同的<b>暗号</b>',
+  wordPh:'暗号', connectBtn:'连接！', quitBtn:'取消',
+  defaultName:'{min}分钟涂鸦', defaultNameN:'{min}分钟涂鸦{n}号',
+  nameA:['莫','嘎','咚','皮','嘟','贝','咕','壳','蹦','姆'],
+  nameB:['宝','子','林','刚','喷','太郎','王','爷','丸','努'],
+},
+ko:{
+  subtitle:'～ 직접 그린 6마리로 덱 배틀 ～（시작판）',
+  rules:'✏️ <b>3분・6분・10분・12분・16분・20분</b>, 각 시간에 1마리씩 총 6마리를 그리자!<br>🎲 스탯은 시간대별 <b>범위 내 랜덤 부여</b>. 그림의 느낌이 경향을 결정!<br>🎨 타입(🔥💧🌿🌑✨)과 <b>기술 4개</b>도 그림과 스탯으로 자동 결정!<br>💨 빠른 몬스터는 <b>선공</b>하고 공격을 <b>회피</b>하기도!<br>🌐 온라인은 <b>자유 대전</b>과 <b>친구 대전(암호)</b> 2종류!<br>📦 시간대별 <b>5마리까지 보관</b> 가능(자동 저장). 온라인에서 이기면 <b>상대 몬스터 1마리를 빼앗을 수 있다</b>…!',
+  mkdeck:'✏️ 덱 만들기', deckTitle:'덱을 만들자',
+  deckSub:'슬롯을 탭 → 그리기 or 보관함에서 선택. 시간대별 5마리까지!',
+  btnAI:'⚔️ AI 대전', btnFree:'🌐 자유 대전', btnFriend:'🤝 친구 대전', btnReset:'🗑️ 보관함 전체 삭제',
+  confirmReset:'모든 보관 몬스터를 삭제할까요? (되돌릴 수 없어요)',
+  drawTier:'{min}분 몬스터',
+  drawMsg:'✏️ 잉크 시간 {min}분(펜을 움직이는 동안만 감소). 그림의 느낌으로 스탯 경향・타입・기술이 결정돼요!',
+  btnDone:'완성!', tipStock:'(탭해서 보관함 열기)',
+  stockOf:'📦 {min}분 몬스터 보관함（{n}/{max}）', newDraw:'새로 그리기', inDeck:'⭐덱에 있음',
+  editTitle:'✏️ 「{n}」을(를) 어떻게 할까?', menuSelect:'⭐ 덱에 넣기',
+  menuEdit:'✏️ 덧그리기・수정', menuEditSub:'지금 그림에서 이어서 (잉크 시간 전부 회복)',
+  menuRedraw:'🎨 처음부터 다시 그리기', menuRename:'📛 이름 바꾸기', menuDelete:'🗑️ 이 몬스터 삭제', menuBack:'뒤로',
+  editNote:'※편집을 완성하면 스탯・타입・기술이 다시 정해져요',
+  renamePrompt:'새 이름은? (14자까지)', stockClose:'닫기',
+  benchStarter:'선봉 몬스터를 고르자!', benchForced:'다음 몬스터를 고르자!', benchSwitch:'누구와 교체할까?', benchCancel:'취소',
+  timeLeft:'남은 {s}초', autoPick:'⏰ 시간 초과! 자동으로 선택됐다!',
+  scoreYou:'나 {n}/6', scoreOpp:'상대 {n}/6', nameMin:'{n}（{min}분）',
+  btnSwitch:'🔄 교체（턴을 소비）',
+  hint_atk:'👀 {n}에게서 살기가 느껴진다…!', hint_def:'👀 {n}은(는) 방어 태세인 것 같다…', hint_heal:'👀 {n}이(가) 상처를 신경 쓰고 있다…',
+  hint_buff:'👀 {n}이(가) 힘을 모으고 싶어 한다…', hint_debuff:'👀 {n}이(가) 음흉한 눈으로 보고 있다…', hint_status:'👀 {n}의 움직임이 수상하다…',
+  waitAct:'⌛ 상대의 행동을 기다리는 중…', waitStarter:'⌛ 상대의 선봉을 기다리는 중…', waitSwap:'⌛ 상대의 교체를 기다리는 중…', whatDo:'어떻게 할까?',
+  desc_atk:'위력 {p}', desc_acc:'・명중 {a}%', desc_def:'이번 턴 피해 대폭 감소＋반격', desc_heal:'HP 35% 회복（남은 {n}회）',
+  desc_buff:'자신의 {s} 올리기', desc_debuff:'상대의 {s} 내리기', desc_status:'상대를 {k} 상태로',
+  type0:'불꽃', type1:'물', type2:'풀', type3:'어둠', type4:'빛',
+  stat_atk:'공격', stat_def:'방어', stat_spd:'스피드',
+  kind_poison:'독', kind_burn:'화상', kind_para:'마비',
+  mult_sup:' 효과가 굉장했다!', mult_weak:' 효과가 별로인 듯하다…',
+  para_cant:'⚡ {n}은(는) 저려서 움직일 수 없다!', def_use:'🛡️ {n}은(는) {m}(으)로 몸을 굳혔다!',
+  atk_miss:'💫 {n}의 {m}! 그러나 빗나갔다!', atk_blocked:'🛡️ {f}이(가) 방어! {n}의 {m}은 {d}에 그치고 {c} 반격당했다!',
+  atk_dodge:'💨 {n}의 {m}! 그러나 {f}이(가) 사뿐히 피했다!', atk_hit:'⚔️ {n}의 {m}! {d} 데미지!{x}',
+  heal_empty:'…{n}의 {m}은(는) 더 이상 쓸 수 없다!', heal_use:'💚 {n}의 {m}! HP가 {d} 회복!（남은 {u}회）',
+  buff_max:'…{n}의 {s}은(는) 더 오르지 않는다!', buff_use:'⬆️ {n}의 {m}! {s}이(가) 올랐다!',
+  debuff_miss:'💫 {n}의 {m}! 그러나 잘 되지 않았다!', debuff_floor:'…그러나 {f}의 {s}은(는) 더 내려가지 않는다!', debuff_use:'⬇️ {n}의 {m}! {f}의 {s}이(가) 내려갔다!',
+  st_already:'…{n}의 {m}! 그러나 {f}은(는) 이미 상태 이상이다!', st_miss:'💫 {n}의 {m}! 그러나 피해 버렸다!', st_apply:'{i} {n}의 {m}! {f}은(는) {k} 상태가 되었다!',
+  dot_poison:'🟣 {n}은(는) 독으로 {d} 데미지…', dot_burn:'🔥 {n}은(는) 화상으로 {d} 데미지…', st_cured:'✨ {n}의 {k}이(가) 나았다!',
+  ko_enemy:'💥 {n}을(를) 쓰러뜨렸다!', ko_mine:'💔 {n}은(는) 쓰러졌다…', ko_pvp:'💥 {n}은(는) 쓰러졌다!',
+  send_next:'👾 상대는 {n}（{min}분）을(를) 내보냈다!', send_next2:'👾 상대는 {n}을(를) 내보냈다!',
+  go_mon:'🎬 가라, {n}!', turn_header:'▶ {a}：{x}　／　{b}：{y}',
+  battle_start:'⚔️ 배틀 시작! 선봉 몬스터를 고르자.',
+  switch_self:'🔄 교체! 가라, {n}!', switch_opp:'🔄 상대가 교체! {n}이(가) 나왔다!',
+  pvp_start:'🌐 온라인 대전 시작!（나＝{t}）', opp_starter:'👾 상대의 선봉은 {n}!',
+  revType:'{i} {t} 타입!', learned:'배운 기술：', backDeck:'덱으로 돌아가기', nameLabel:'📛 이름：',
+  reason_hp:'크고 듬직한 그림! → 체력형으로 자랐다', reason_atk:'붉고 공격적인 그림! → 공격형으로 자랐다',
+  reason_def:'빽빽하게 칠해서 단단해 보여! → 방어형으로 자랐다', reason_spd:'가볍고 날렵해 보여! → 스피드형으로 자랐다',
+  reason_blank:'새하얗다… 수수께끼의 몬스터',
+  statL_hp:'❤️체력', statL_atk:'⚔️공격력', statL_def:'🛡️방어력', statL_spd:'💨스피드',
+  winTitle:'🎉 승리!', winText:'상대의 덱을 전멸시켰다!<br>남은 몬스터：<b>{n}마리</b>',
+  btnRematch:'⚔️ 같은 덱으로 재대결', btnNewDeck:'✏️ 새 덱',
+  loseTitle:'💀 패배…', loseText:'덱이 전멸했다…<br>타입 상성・기술・교체를 다시 생각해 보자.',
+  pvpWinText:'상대의 덱을 전멸시켰다!<br>보상으로 <b>상대 몬스터 1마리</b>를 빼앗을 수 있다!', btnSteal:'😈 빼앗을 몬스터 고르기',
+  loseWaitSteal:'💀 졌다…<br>상대가 <b>빼앗을 몬스터</b>를 고르는 중…',
+  stealTitle:'😈 어떤 몬스터를 빼앗을까?', mercyBtn:'😇 빼앗지 않기（자비）',
+  mercyTitle:'😇 자비', mercyText1:'아무것도 빼앗지 않고 승리 선언만 했다. 멋있다…!', mercyText2:'교체가 아까워서 아무것도 빼앗지 않았다.',
+  replaceFull:'📦 {min}분 보관함이 가득! 무엇과 교체할까?', replaceCancel:'빼앗기 그만두기',
+  gotTitle:'🎁 겟!', gotText:'「{n}」을(를) 빼앗았다!<br>{min}분 보관함에 추가했어.',
+  stolenTitle:'💔 빼앗겼다…', stolenText:'「{n}」이(가) 상대의 손에 넘어갔다…<br>다시 그려서 되찾자!',
+  safeTitle:'😇 세이프!', safeText:'상대는 아무것도 빼앗지 않고 떠났다…!<br>덱은 무사하다.',
+  netLoadFail:'온라인 기능 로드 실패…<br>인터넷 연결을 확인하고 새로고침하세요', closeBtn:'닫기', cancelBtn:'취소',
+  connWord:'🤝 암호 「{w}」로 연결 중…', searching:'🌐 자유 대전 상대를 찾는 중…',
+  roomWait:'🛋️ 방을 만들었다! 상대를 기다리는 중…<br><small>이 화면을 유지해 주세요</small>',
+  found:'✅ 상대를 찾았다! 덱 교환 중…', notFound:'상대를 찾지 못했다…<br>다시 시도해 보세요',
+  dropTitle:'⚠️ 통신 오류', dropText:'상대와의 연결이 끊어졌다…',
+  friendTitle:'🤝 친구 대전', friendText:'친구와 같은 <b>암호</b>를 입력하세요',
+  wordPh:'암호', connectBtn:'연결!', quitBtn:'취소',
+  defaultName:'{min}분 낙서', defaultNameN:'{min}분 낙서 {n}호',
+  nameA:['모','갸','준','피','드로','베로','그라','케케','본','무니'],
+  nameB:['짱','조','린','곤','펜','타로','킹','영감','마루','누스'],
+},
+de:{
+  subtitle:'~ Deck-Kampf mit 6 selbst gezeichneten Monstern ~ (Prototyp)',
+  rules:'✏️ Zeichne je 1 Monster in <b>3, 6, 10, 12, 16 & 20 Minuten</b> — 6 insgesamt!<br>🎲 Werte werden <b>zufällig im Bereich der Zeitstufe</b> vergeben. Dein Bild prägt die Tendenz!<br>🎨 Typ (🔥💧🌿🌑✨) und <b>4 Attacken</b> werden aus Bild & Werten bestimmt!<br>💨 Schnelle Monster schlagen <b>zuerst</b> zu und <b>weichen</b> manchmal aus!<br>🌐 Online: <b>Zufallskampf</b> oder <b>Freundeskampf (Losungswort)</b>!<br>📦 Bis zu <b>5 pro Stufe lagern</b> (Autospeichern). Gewinne online und <b>stiehl ein Monster deines Gegners</b>…!',
+  mkdeck:'✏️ Deck bauen', deckTitle:'Bau dein Deck',
+  deckSub:'Slot antippen → zeichnen oder aus dem Lager wählen. Max. 5 pro Stufe!',
+  btnAI:'⚔️ Gegen KI', btnFree:'🌐 Zufallskampf', btnFriend:'🤝 Freundeskampf', btnReset:'🗑️ Lager löschen',
+  confirmReset:'ALLE gelagerten Monster löschen? (Nicht rückgängig machbar)',
+  drawTier:'{min}-Min-Monster',
+  drawMsg:'✏️ {min} Min Tintenzeit (läuft nur, während der Stift sich bewegt). Dein Bild bestimmt Tendenz, Typ & Attacken!',
+  btnDone:'Fertig!', tipStock:'(antippen: Lager öffnen)',
+  stockOf:'📦 {min}-Min-Monsterlager ({n}/{max})', newDraw:'Neues zeichnen', inDeck:'⭐Im Deck',
+  editTitle:'✏️ Was tun mit „{n}“?', menuSelect:'⭐ Ins Deck',
+  menuEdit:'✏️ Weiterzeichnen / ändern', menuEditSub:'Vom aktuellen Bild aus (Tintenzeit aufgefüllt)',
+  menuRedraw:'🎨 Von vorn neu zeichnen', menuRename:'📛 Umbenennen', menuDelete:'🗑️ Dieses löschen', menuBack:'Zurück',
+  editNote:'*Nach dem Bearbeiten werden Werte, Typ & Attacken neu bestimmt',
+  renamePrompt:'Neuer Name? (max. 14 Zeichen)', stockClose:'Schließen',
+  benchStarter:'Wähle deinen Starter!', benchForced:'Wähle das nächste Monster!', benchSwitch:'Mit wem tauschen?', benchCancel:'Abbrechen',
+  timeLeft:'noch {s}s', autoPick:'⏰ Zeit um! Automatisch gewählt!',
+  scoreYou:'Du {n}/6', scoreOpp:'Gegner {n}/6', nameMin:'{n} ({min}m)',
+  btnSwitch:'🔄 Wechseln (kostet den Zug)',
+  hint_atk:'👀 {n} strahlt Kampflust aus…!', hint_def:'👀 {n} scheint sich zu wappnen…', hint_heal:'👀 {n} achtet auf seine Wunden…',
+  hint_buff:'👀 {n} will wohl Kraft sammeln…', hint_debuff:'👀 {n} beäugt dich hinterhältig…', hint_status:'👀 {n} bewegt sich verdächtig…',
+  waitAct:'⌛ Warte auf den Zug des Gegners…', waitStarter:'⌛ Warte auf den Starter des Gegners…', waitSwap:'⌛ Warte auf den Wechsel des Gegners…', whatDo:'Was tun?',
+  desc_atk:'Stärke {p}', desc_acc:' · Genauigkeit {a}%', desc_def:'Diese Runde Schaden stark senken & kontern', desc_heal:'35% KP heilen ({n} übrig)',
+  desc_buff:'Eigene {s} erhöhen', desc_debuff:'{s} des Gegners senken', desc_status:'Gegner mit {k} belegen',
+  type0:'Feuer', type1:'Wasser', type2:'Pflanze', type3:'Dunkel', type4:'Licht',
+  stat_atk:'Angriff', stat_def:'Verteidigung', stat_spd:'Tempo',
+  kind_poison:'Gift', kind_burn:'Verbrennung', kind_para:'Paralyse',
+  mult_sup:' Sehr effektiv!', mult_weak:' Nicht sehr effektiv…',
+  para_cant:'⚡ {n} ist paralysiert und kann nicht handeln!', def_use:'🛡️ {n} wappnet sich mit {m}!',
+  atk_miss:'💫 {n}s {m}! Aber daneben!', atk_blocked:'🛡️ {f} blockt! {n}s {m} macht nur {d}, Konter für {c}!',
+  atk_dodge:'💨 {n}s {m}! Aber {f} weicht aus!', atk_hit:'⚔️ {n}s {m}! {d} Schaden!{x}',
+  heal_empty:'…{n}s {m} ist aufgebraucht!', heal_use:'💚 {n}s {m}! {d} KP geheilt! ({u} übrig)',
+  buff_max:'…{n}s {s} steigt nicht weiter!', buff_use:'⬆️ {n}s {m}! {s} stieg!',
+  debuff_miss:'💫 {n}s {m}! Aber es misslang!', debuff_floor:'…aber {f}s {s} sinkt nicht weiter!', debuff_use:'⬇️ {n}s {m}! {f}s {s} sank!',
+  st_already:'…{n}s {m}! Aber {f} ist schon betroffen!', st_miss:'💫 {n}s {m}! Aber ausgewichen!', st_apply:'{i} {n}s {m}! {f} erlitt {k}!',
+  dot_poison:'🟣 {n} erleidet {d} Giftschaden…', dot_burn:'🔥 {n} erleidet {d} Brandschaden…', st_cured:'✨ {n} ist von {k} geheilt!',
+  ko_enemy:'💥 {n} wurde besiegt!', ko_mine:'💔 {n} ist k.o.…', ko_pvp:'💥 {n} ist k.o.!',
+  send_next:'👾 Gegner schickt {n} ({min}m)!', send_next2:'👾 Gegner schickt {n}!',
+  go_mon:'🎬 Los, {n}!', turn_header:'▶ {a}: {x} / {b}: {y}',
+  battle_start:'⚔️ Kampfstart! Wähle deinen Starter.',
+  switch_self:'🔄 Wechsel! Los, {n}!', switch_opp:'🔄 Gegner wechselt! {n} erscheint!',
+  pvp_start:'🌐 Online-Kampf startet! (Du = {t})', opp_starter:'👾 Der Starter des Gegners ist {n}!',
+  revType:'{i} Typ {t}!', learned:'Erlernte Attacken:', backDeck:'Zurück zum Deck', nameLabel:'📛 Name:',
+  reason_hp:'Ein großes, wuchtiges Bild! → KP-lastig', reason_atk:'Rot und aggressiv! → Angriffslastig',
+  reason_def:'Dicht ausgemalt, wirkt robust! → Verteidigungslastig', reason_spd:'Leicht und flink! → Tempolastig',
+  reason_blank:'Ganz weiß… ein rätselhaftes Monster',
+  statL_hp:'❤️KP', statL_atk:'⚔️Angriff', statL_def:'🛡️Verteidigung', statL_spd:'💨Tempo',
+  winTitle:'🎉 SIEG!', winText:'Du hast das gegnerische Deck ausgelöscht!<br>Übrige Monster: <b>{n}</b>',
+  btnRematch:'⚔️ Revanche (gleiches Deck)', btnNewDeck:'✏️ Neues Deck',
+  loseTitle:'💀 NIEDERLAGE…', loseText:'Dein Deck wurde ausgelöscht…<br>Überdenke Typen, Attacken & Wechsel!',
+  pvpWinText:'Du hast das gegnerische Deck ausgelöscht!<br>Als Belohnung darfst du <b>ein Monster stehlen</b>!', btnSteal:'😈 Monster zum Stehlen wählen',
+  loseWaitSteal:'💀 Verloren…<br>Der Gegner wählt, <b>welches Monster er stiehlt</b>…',
+  stealTitle:'😈 Welches Monster stehlen?', mercyBtn:'😇 Nichts stehlen (Gnade)',
+  mercyTitle:'😇 Gnade', mercyText1:'Du nahmst nichts und verkündetest nur den Sieg. Stark…!', mercyText2:'Kein Tausch wert — du nahmst nichts.',
+  replaceFull:'📦 {min}-Min-Lager ist voll! Welches ersetzen?', replaceCancel:'Diebstahl abbrechen',
+  gotTitle:'🎁 Erbeutet!', gotText:'Du hast „{n}“ gestohlen!<br>Im {min}-Min-Lager abgelegt.',
+  stolenTitle:'💔 Gestohlen…', stolenText:'„{n}“ gehört jetzt deinem Gegner…<br>Zeichne neu und hol es dir zurück!',
+  safeTitle:'😇 Glück gehabt!', safeText:'Der Gegner zog ohne Beute ab…!<br>Dein Deck ist unversehrt.',
+  netLoadFail:'Online-Funktionen konnten nicht geladen werden…<br>Verbindung prüfen und neu laden', closeBtn:'Schließen', cancelBtn:'Abbrechen',
+  connWord:'🤝 Verbinde mit Losungswort „{w}“…', searching:'🌐 Suche zufälligen Gegner…',
+  roomWait:'🛋️ Raum erstellt! Warte auf Gegner…<br><small>Bildschirm geöffnet lassen</small>',
+  found:'✅ Gegner gefunden! Tausche Decks…', notFound:'Kein Gegner gefunden…<br>Bitte erneut versuchen',
+  dropTitle:'⚠️ Verbindungsfehler', dropText:'Verbindung zum Gegner verloren…',
+  friendTitle:'🤝 Freundeskampf', friendText:'Gib dasselbe <b>Losungswort</b> wie dein Freund ein',
+  wordPh:'Losungswort', connectBtn:'Verbinden!', quitBtn:'Abbrechen',
+  defaultName:'{min}-Min-Kritzelei', defaultNameN:'{min}-Min-Kritzelei Nr.{n}',
+  nameA:['Mo','Gya','Zun','Pi','Dro','Bello','Gra','Keke','Bon','Muni','Zara','Pechi'],
+  nameB:['py','zo','rin','gon','pen','ster','könig','ji','maru','nus'],
+},
+};
+function T(k, v){
+  let s = (I18N[LANG] && I18N[LANG][k] != null) ? I18N[LANG][k] : I18N.ja[k];
+  if(s == null) return k;
+  if(v) for(const key in v) s = s.split('{'+key+'}').join(v[key]);
+  return s;
+}
+function TA(k){ return (I18N[LANG] && I18N[LANG][k]) || I18N.ja[k]; }
+const statName = s => T('stat_'+s);
+const kindName = k => T('kind_'+k);
+const typeName = i => T('type'+i);
+/* 技名の翻訳（[en,zh,ko,de]、日本語が原文） */
+const MOVE_LANGS = ['en','zh','ko','de'];
+const MOVE_TR = {
+'ヒートスクラッチ':['Heat Scratch','炽热爪击','히트 스크래치','Hitzekratzer'],
+'メラメラタッチ':['Flame Touch','火焰之触','이글이글 터치','Flammenhauch'],
+'ばくねつグルグル':['Blazing Whirl','爆热旋涡','폭열 빙글빙글','Glutwirbel'],
+'かえんスプラッタ':['Flame Splatter','火焰泼溅','화염 스플래터','Flammenspritzer'],
+'マグマのカベがき':['Magma Wall Doodle','岩浆涂鸦墙','마그마 낙서벽','Magma-Kritzelwand'],
+'ぬくぬくたきび':['Cozy Bonfire','暖暖篝火','포근한 모닥불','Lagerfeuerchen'],
+'メラメラごころ':['Burning Heart','熊熊斗志','타오르는 마음','Brennendes Herz'],
+'ヒートダッシュ':['Heat Dash','炽热冲刺','히트 대시','Hitzesprint'],
+'けむりまき':['Smoke Screen','烟雾弥漫','연막 뿌리기','Rauchwolke'],
+'すすけたインク':['Sooty Ink','烟熏墨水','그을린 잉크','Rußige Tinte'],
+'チリチリのろい':['Sizzle Curse','灼烧诅咒','지글지글 저주','Brutzelfluch'],
+'みずでっぽうがき':['Squirt Doodle','水枪涂鸦','물총 낙서','Spritzkritzel'],
+'スプラッシュパンチ':['Splash Punch','水花重拳','스플래시 펀치','Platschhieb'],
+'ドバッとかいすい':['Tidal Dump','海水倾泻','왈칵 바닷물','Wasserschwall'],
+'うずまきクラッシュ':['Whirlpool Crash','漩涡冲击','소용돌이 크래시','Strudel-Crash'],
+'あわあわバリア':['Bubble Barrier','泡泡屏障','거품 배리어','Blasenbarriere'],
+'うるおいタッチ':['Moist Touch','滋润之触','촉촉 터치','Feuchte Berührung'],
+'ぬるぬるステップ':['Slippery Step','滑溜步伐','미끌미끌 스텝','Glitschschritt'],
+'しっとりガード':['Dewy Guard','湿润防御','촉촉 가드','Tauschutz'],
+'みずびたしインク':['Soggy Ink','浸水墨水','물에 젖은 잉크','Nasse Tinte'],
+'ビリビリしぶき':['Tingling Spray','麻麻水花','찌릿찌릿 물보라','Kribbelgischt'],
+'はっぱカッターがき':['Leaf Cutter Doodle','落叶飞刀涂鸦','잎날 낙서','Blattschneider'],
+'ツルのむち':['Vine Whip','藤蔓之鞭','덩굴 채찍','Rankenpeitsche'],
+'トゲトゲアタック':['Spiky Attack','尖刺攻击','가시가시 어택','Stachelattacke'],
+'まるたおとし':['Log Drop','圆木坠落','통나무 떨구기','Baumstammschlag'],
+'まるまるこのは':['Leaf Curl','卷叶护体','도르르 나뭇잎','Blattpanzer'],
+'ひなたぼっこ':['Sunbathing','晒太阳','햇볕쬐기','Sonnenbad'],
+'ぐんぐんせいちょう':['Rapid Growth','茁壮成长','쑥쑥 성장','Wachstumsschub'],
+'ねっこはり':['Root Grip','扎根','뿌리내리기','Wurzelgriff'],
+'まきつきツル':['Binding Vine','缠绕藤蔓','휘감는 덩굴','Würgeranke'],
+'どくどくかふん':['Toxic Pollen','剧毒花粉','독독 꽃가루','Giftpollen'],
+'やみのひっかき':['Dark Scratch','暗影抓挠','어둠의 할퀴기','Dunkelkratzer'],
+'まっくろパンチ':['Pitch-Black Punch','漆黑重拳','새까만 펀치','Schwarzer Hieb'],
+'まっくろスプラッタ':['Pitch-Black Splatter','漆黑泼墨','새까만 스플래터','Schwarzspritzer'],
+'ダークインクほう':['Dark Ink Cannon','暗墨炮','다크 잉크포','Tintenkanone'],
+'かげにひそむ':['Lurk in Shadows','潜入阴影','그림자 숨기','Schattenversteck'],
+'つきよのいやし':['Moonlit Healing','月夜治愈','달밤의 치유','Mondscheinheilung'],
+'くらやみパワー':['Darkness Power','黑暗之力','어둠의 힘','Finstermacht'],
+'ぬきあしさしあし':['Sneaky Steps','蹑手蹑脚','살금살금','Schleichschritt'],
+'のろいのらくがき':['Cursed Doodle','诅咒涂鸦','저주의 낙서','Fluchkritzelei'],
+'ふあんのささやき':['Anxious Whisper','不安低语','불안한 속삭임','Angstgeflüster'],
+'どくインクまみれ':['Toxic Ink Slime','毒墨缠身','독 잉크 범벅','Gifttinte'],
+'ピカッとフラッシュ':['Dazzling Flash','闪亮一击','번쩍 플래시','Blendblitz'],
+'キラメキチョップ':['Sparkle Chop','闪耀手刀','반짝 촙','Funkelhieb'],
+'ごうかいビーム':['Mighty Beam','豪快光束','호쾌 빔','Mächtiger Strahl'],
+'スターシャワー':['Star Shower','星星雨','스타 샤워','Sternenschauer'],
+'ひかりのまく':['Veil of Light','光之幕','빛의 장막','Lichtschleier'],
+'キラキラチャージ':['Sparkle Charge','闪闪充能','반짝반짝 차지','Funkelladung'],
+'かがやきアップ':['Radiance Up','光辉提升','광휘 업','Glanzschub'],
+'ピカピカソール':['Shiny Soles','闪亮鞋底','반들반들 밑창','Blanke Sohlen'],
+'まぶしいひかり':['Blinding Light','刺眼强光','눈부신 빛','Grelles Licht'],
+'めくらましスパーク':['Dazzle Spark','眩目火花','현혹 스파크','Blendfunke'],
+};
+function trMove(name){
+  if(LANG==='ja') return name;
+  const tr = MOVE_TR[name];
+  if(!tr) return name;
+  const i = MOVE_LANGS.indexOf(LANG);
+  return i>=0 ? tr[i] : name;
+}
+const escName = s => String(s).replace(/[<>&"']/g,'').replace(/^P[12]・/,'').trim().slice(0,14);
+function setLang(l){
+  if(!I18N[l]) return;
+  LANG = l;
+  try{ localStorage.setItem('rkgk-lang', l); }catch(e){}
+  applyLang();
+}
+function applyLang(){
+  document.documentElement.lang = LANG;
+  const set = (id, html)=>{ const e=document.getElementById(id); if(e) e.innerHTML = html; };
+  set('subtitle-el', T('subtitle'));
+  set('rules-box', T('rules'));
+  set('mkdeck-btn', T('mkdeck'));
+  set('deck-h2', T('deckTitle'));
+  set('deck-sub', T('deckSub'));
+  set('battle-btn', T('btnAI'));
+  set('free-btn', T('btnFree'));
+  set('friend-btn', T('btnFriend'));
+  set('reset-btn', T('btnReset'));
+  set('done-btn', T('btnDone'));
+  set('switch-btn', T('btnSwitch'));
+  set('stock-close', T('stockClose'));
+  set('menu-select', T('menuSelect'));
+  set('menu-edit', `${T('menuEdit')}<br><small style="font-size:11px; opacity:.65;">${T('menuEditSub')}</small>`);
+  set('menu-redraw', T('menuRedraw'));
+  set('menu-rename', T('menuRename'));
+  set('menu-delete', T('menuDelete'));
+  set('menu-back', T('menuBack'));
+  set('edit-note', T('editNote'));
+  set('friend-title', T('friendTitle'));
+  set('friend-text', T('friendText'));
+  set('connect-btn', T('connectBtn'));
+  set('word-quit', T('quitBtn'));
+  set('bench-cancel', T('benchCancel'));
+  const wi = document.getElementById('word-input');
+  if(wi) wi.placeholder = T('wordPh');
+  document.querySelectorAll('.langbtn').forEach(b=>b.classList.toggle('sel', b.dataset.lang===LANG));
+}
+
+const TIERS = [
+  {min:3,  hp:[90,150],  atk:[12,22], def:[6,14],  spd:[6,16]},
+  {min:6,  hp:[115,185], atk:[15,27], def:[8,18],  spd:[8,20]},
+  {min:10, hp:[140,220], atk:[18,32], def:[10,22], spd:[10,24]},
+  {min:12, hp:[165,255], atk:[21,37], def:[12,26], spd:[12,28]},
+  {min:16, hp:[190,290], atk:[24,42], def:[14,30], spd:[14,32]},
+  {min:20, hp:[215,325], atk:[27,47], def:[16,34], spd:[16,36]},
+];
+const TYPES = [
+  {icon:'🔥', name:'ほのお'},
+  {icon:'💧', name:'みず'},
+  {icon:'🌿', name:'くさ'},
+  {icon:'🌑', name:'やみ'},
+  {icon:'✨', name:'ひかり'},
+];
+function typeMult(a, d){
+  if((a===0&&d===2)||(a===2&&d===1)||(a===1&&d===0)) return 1.5;
+  if((a===2&&d===0)||(a===1&&d===2)||(a===0&&d===1)) return 0.65;
+  if((a===3&&d===4)||(a===4&&d===3)) return 1.5;
+  return 1;
+}
+const COLOR_TYPE   = [3,0,1,2,0,3,4,4,1,2];
+const COLOR_WEIGHT = [0.5,1,1,1,1,1,1,1,1,1];
+const NAME_A = ['モ','ギャ','ズン','ピ','ドロ','ベロ','グラ','ケケ','ボン','ムニ','ザラ','ペチ'];
+const NAME_B = ['ちゃん','ぞう','りん','ゴン','ペン','たろう','キング','じい','まる','ヌス'];
+
+/* ============ 技データ ============ */
+const STAT_JP = {atk:'こうげき', def:'ぼうぎょ', spd:'すばやさ'};
+const KIND_JP = {poison:'どく', burn:'やけど', para:'まひ'};
+const KIND_ICON = {poison:'🟣', burn:'🔥', para:'⚡'};
+const CAT_ICON = {atk:'⚔️', def:'🛡️', heal:'💚', buff:'⬆️', debuff:'⬇️', status:'🌀'};
+/* タイプ別オリジナル技名 */
+const MOVE_DB = [
+  { // 🔥ほのお
+    atk1:['ヒートスクラッチ','メラメラタッチ'], atk2:['ばくねつグルグル','かえんスプラッタ'],
+    def:['マグマのカベがき'], heal:['ぬくぬくたきび'],
+    buff:[['メラメラごころ','atk'],['ヒートダッシュ','spd']],
+    debuff:[['けむりまき','spd'],['すすけたインク','atk']],
+    status:[['チリチリのろい','burn']],
+  },
+  { // 💧みず
+    atk1:['みずでっぽうがき','スプラッシュパンチ'], atk2:['ドバッとかいすい','うずまきクラッシュ'],
+    def:['あわあわバリア'], heal:['うるおいタッチ'],
+    buff:[['ぬるぬるステップ','spd'],['しっとりガード','def']],
+    debuff:[['みずびたしインク','spd']],
+    status:[['ビリビリしぶき','para']],
+  },
+  { // 🌿くさ
+    atk1:['はっぱカッターがき','ツルのむち'], atk2:['トゲトゲアタック','まるたおとし'],
+    def:['まるまるこのは'], heal:['ひなたぼっこ'],
+    buff:[['ぐんぐんせいちょう','atk'],['ねっこはり','def']],
+    debuff:[['まきつきツル','spd']],
+    status:[['どくどくかふん','poison']],
+  },
+  { // 🌑やみ
+    atk1:['やみのひっかき','まっくろパンチ'], atk2:['まっくろスプラッタ','ダークインクほう'],
+    def:['かげにひそむ'], heal:['つきよのいやし'],
+    buff:[['くらやみパワー','atk'],['ぬきあしさしあし','spd']],
+    debuff:[['のろいのらくがき','atk'],['ふあんのささやき','def']],
+    status:[['どくインクまみれ','poison']],
+  },
+  { // ✨ひかり
+    atk1:['ピカッとフラッシュ','キラメキチョップ'], atk2:['ごうかいビーム','スターシャワー'],
+    def:['ひかりのまく'], heal:['キラキラチャージ'],
+    buff:[['かがやきアップ','atk'],['ピカピカソール','spd']],
+    debuff:[['まぶしいひかり','atk']],
+    status:[['めくらましスパーク','para']],
+  },
+];
+function mkMove(cat, db, rel){
+  if(cat==='atk1') return {name:pick(db.atk1), cat:'atk', pow:1.0, acc:1};
+  if(cat==='atk2') return {name:pick(db.atk2), cat:'atk', pow:1.5, acc:0.85};
+  if(cat==='def')  return {name:pick(db.def), cat:'def'};
+  if(cat==='heal') return {name:pick(db.heal), cat:'heal', uses:3, maxUses:3};
+  if(cat==='buff'){
+    // ステータス傾向に合った強化を選びやすい
+    const cands = db.buff.map(([n,s])=>({n,s,w:0.3+(rel?rel[s]||0:Math.random())}));
+    const tot = cands.reduce((a,c)=>a+c.w,0);
+    let r = Math.random()*tot;
+    for(const c of cands){ r-=c.w; if(r<=0) return {name:c.n, cat:'buff', sub:c.s}; }
+    return {name:cands[0].n, cat:'buff', sub:cands[0].s};
+  }
+  if(cat==='debuff'){ const [n,s]=pick(db.debuff); return {name:n, cat:'debuff', sub:s}; }
+  const [n,k]=pick(db.status); return {name:n, cat:'status', kind:k};
+}
+/* 絵のイメージ（タイプ）とステータスに合わせて4技を付与 */
+function genMoves(m){
+  const t = TIERS[m.tier];
+  const rel = {
+    hp:(m.maxHp-t.hp[0])/(t.hp[1]-t.hp[0]), atk:(m.atk-t.atk[0])/(t.atk[1]-t.atk[0]),
+    def:(m.def-t.def[0])/(t.def[1]-t.def[0]), spd:(m.spd-t.spd[0])/(t.spd[1]-t.spd[0]),
+  };
+  const db = MOVE_DB[m.type];
+  const moves = [mkMove('atk1', db, rel)]; // 1枠目は必ず攻撃技
+  const pool = ['atk2','def','heal','buff','debuff','status'];
+  const w = {
+    atk2:0.3+rel.atk, def:0.2+rel.def, heal:0.25+rel.hp*0.8,
+    buff:0.5, debuff:0.5, status:0.55,
+  };
+  for(let k=0;k<3;k++){
+    const tot = pool.reduce((s,c)=>s+w[c],0);
+    let r = Math.random()*tot, chosen = pool[0];
+    for(const c of pool){ r-=w[c]; if(r<=0){chosen=c; break;} }
+    moves.push(mkMove(chosen, db, rel));
+    pool.splice(pool.indexOf(chosen),1);
+  }
+  return moves;
+}
+function moveDesc(mv){
+  if(mv.cat==='atk') return T('desc_atk',{p:Math.round(mv.pow*100)}) + (mv.acc<1 ? T('desc_acc',{a:Math.round(mv.acc*100)}) : '');
+  if(mv.cat==='def') return T('desc_def');
+  if(mv.cat==='heal') return T('desc_heal',{n:mv.uses});
+  if(mv.cat==='buff') return T('desc_buff',{s:statName(mv.sub)});
+  if(mv.cat==='debuff') return T('desc_debuff',{s:statName(mv.sub)});
+  return T('desc_status',{k:kindName(mv.kind)});
+}
+
+/* ============ 状態 ============ */
+const S = {
+  deck: [], eDeck: [],
+  stock: TIERS.map(()=>[]),      // ティアごと最大5体のストック
+  deckSel: TIERS.map(()=>null),  // 各ティアでデッキに入れているストック番号
+  drawTier: -1, drawStockIdx: null,
+  pIdx: 0, eIdx: 0,
+  eNext:null, pDef:false, eDef:false,
+  busy:false, inputOn:false, turn:0,
+  timerId:null, timeLeft:0, timeMax:0,
+  benchMode:'switch', pvpWon:false, pvpLost:false,
+  actionSent:false, // PvP：このターンの行動を送信済みか
+  replaying:false, goQueued:false, // PvP：ログ再生中に'go'が届いたときの制御
+};
+const STOCK_MAX = 5;
+function blankSlot(i){
+  return {
+    tier:i, url:null, type:null, name:`${TIERS[i].min}分のラクガキ`,
+    hp:0, maxHp:0, atk:0, def:0, spd:0, ko:false,
+    moves:[], stg:{atk:0,def:0,spd:0}, status:null,
+  };
+}
+function newDeckSlots(){ return TIERS.map((t,i)=>blankSlot(i)); }
+S.deck = newDeckSlots();
+/* デッキ＝各ティアの選択中ストック */
+function rebuildDeck(){
+  S.deck = TIERS.map((t,i)=>{
+    const si = S.deckSel[i];
+    return (si!=null && S.stock[i][si]) ? S.stock[i][si] : blankSlot(i);
+  });
+}
+const baseName = m => String(m.name||'').replace(/^P[12]・/,'');
+/* --- 永続化（localStorage） --- */
+function monToJSON(m){
+  return {type:m.type, name:baseName(m), url:m.url, thumb:m.thumb||null, maxHp:m.maxHp, atk:m.atk, def:m.def, spd:m.spd,
+    moves:m.moves.map(mv=>({name:mv.name, cat:mv.cat, pow:mv.pow, acc:mv.acc, sub:mv.sub, kind:mv.kind, maxUses:mv.maxUses}))};
+}
+function saveStock(){
+  try{
+    localStorage.setItem('rkgk-stock-v1', JSON.stringify({
+      stock: S.stock.map(arr=>arr.map(monToJSON)),
+      sel: S.deckSel,
+    }));
+  }catch(e){ console.warn('ストック保存に失敗（容量オーバーかも）', e); }
+}
+function loadStock(){
+  try{
+    const d = JSON.parse(localStorage.getItem('rkgk-stock-v1')||'null');
+    if(!d) return;
+    S.stock = TIERS.map((t,i)=>((d.stock&&d.stock[i])||[]).slice(0,STOCK_MAX).map(o=>reviveMon(o,i)).filter(Boolean));
+    S.deckSel = TIERS.map((t,i)=>{
+      const v = d.sel ? d.sel[i] : null;
+      return (v!=null && S.stock[i][v]) ? v : (S.stock[i].length ? 0 : null);
+    });
+  }catch(e){}
+}
+
+/* ============ ユーティリティ ============ */
+const $ = id => document.getElementById(id);
+const rand = (a,b)=> a + Math.random()*(b-a);
+const ri = (a,b)=> Math.floor(rand(a,b+1));
+const pick = arr => arr[Math.floor(Math.random()*arr.length)];
+const clamp01 = v => Math.max(0, Math.min(1, v));
+const sleep = ms => new Promise(r=>setTimeout(r,ms));
+function show(id){
+  document.querySelectorAll('.screen').forEach(s=>s.classList.remove('active'));
+  $(id).classList.add('active');
+}
+function fmtTime(sec){
+  sec = Math.max(0, Math.ceil(sec));
+  return Math.floor(sec/60) + ':' + String(sec%60).padStart(2,'0');
+}
+const PM = ()=>S.deck[S.pIdx];
+const EM = ()=>S.eDeck[S.eIdx];
+const aliveCount = deck => deck.filter(m=>!m.ko).length;
+const multNote = m => m>1 ? T('mult_sup') : m<1 ? T('mult_weak') : '';
+/* 能力ランク補正（±3段階） */
+const stageMult = s => s>=0 ? (2+s)/2 : 2/(2-s);
+const effAtk = m => m.atk * stageMult(m.stg.atk);
+const effDef = m => m.def * stageMult(m.stg.def);
+const effSpd = m => m.spd * stageMult(m.stg.spd) * (m.status&&m.status.kind==='para'?0.5:1);
+function shake(cardId){
+  $(cardId).classList.add('shake');
+  setTimeout(()=>$(cardId).classList.remove('shake'), 400);
+}
+
+/* ============ サウンド ============ */
+let AC=null;
+function beep(freq, dur=0.1, type='square', vol=0.12, when=0){
+  try{
+    AC = AC || new (window.AudioContext||window.webkitAudioContext)();
+    const o=AC.createOscillator(), g=AC.createGain();
+    o.type=type; o.frequency.value=freq;
+    g.gain.setValueAtTime(vol, AC.currentTime+when);
+    g.gain.exponentialRampToValueAtTime(0.001, AC.currentTime+when+dur);
+    o.connect(g); g.connect(AC.destination);
+    o.start(AC.currentTime+when); o.stop(AC.currentTime+when+dur+0.02);
+  }catch(e){}
+}
+const sfx = {
+  hit:   ()=>{beep(160,0.12,'square',0.15); beep(90,0.15,'sawtooth',0.12,0.03);},
+  guard: ()=>beep(70,0.2,'triangle',0.18),
+  charge:()=>{beep(300,0.08); beep(450,0.08,'square',0.12,0.08); beep(650,0.12,'square',0.12,0.16);},
+  heal:  ()=>[392,523,659].forEach((f,i)=>beep(f,0.12,'sine',0.12,i*0.09)),
+  debuff:()=>[500,380,260].forEach((f,i)=>beep(f,0.1,'triangle',0.12,i*0.08)),
+  win:   ()=>[523,659,784,1046].forEach((f,i)=>beep(f,0.14,'triangle',0.15,i*0.12)),
+  lose:  ()=>[400,330,260,180].forEach((f,i)=>beep(f,0.2,'sawtooth',0.1,i*0.15)),
+  draw:  ()=>beep(880,0.05,'sine',0.05),
+  ko:    ()=>[300,200,120].forEach((f,i)=>beep(f,0.15,'square',0.13,i*0.1)),
+  reveal:()=>[440,554,659,880].forEach((f,i)=>beep(f,0.12,'triangle',0.13,i*0.1)),
+};
+
+/* ============ デッキ編成 ============ */
+function renderDeck(){
+  rebuildDeck();
+  const g = $('deck-grid'); g.innerHTML='';
+  S.deck.forEach((m,i)=>{
+    const t = TIERS[m.tier];
+    const n = S.stock[i].length;
+    const d = document.createElement('div');
+    d.className = 'slot' + (m.url ? ' done' : '');
+    const stats = m.url
+      ? `❤️${m.maxHp}　⚔️${m.atk}　🛡️${m.def}　💨${m.spd}<br>${m.moves.map(mv=>CAT_ICON[mv.cat]).join(' ')}　📦${n}/${STOCK_MAX}`
+      : `❤️${t.hp[0]}〜${t.hp[1]}　⚔️${t.atk[0]}〜${t.atk[1]}<br>🛡️${t.def[0]}〜${t.def[1]}　💨${t.spd[0]}〜${t.spd[1]}　📦${n}/${STOCK_MAX}`;
+    d.innerHTML = `
+      <span class="tier badge">${t.min}分</span>
+      ${m.type!==null ? `<span class="ttype">${TYPES[m.type].icon}</span>` : ''}
+      ${m.url ? `<span class="editmark">📦</span><img src="${m.url}">` : `<div class="empty-box">✏️</div>`}
+      <div class="stats">${stats}</div>`;
+    d.addEventListener('click', ()=>{
+      if(S.stock[i].length===0) startDrawing(i);   // ストックが空なら即お絵描きへ
+      else openStockOverlay(i);
+    });
+    if(m.url) d.title = baseName(m) + T('tipStock');
+    g.appendChild(d);
+  });
+  const ok = S.deck.every(m=>m.url);
+  ['battle-btn','free-btn','friend-btn'].forEach(id=>{ $(id).disabled = !ok; });
+}
+function resetDeck(){
+  if(!confirm(T('confirmReset'))) return;
+  S.stock = TIERS.map(()=>[]);
+  S.deckSel = TIERS.map(()=>null);
+  saveStock();
+  renderDeck();
+}
+/* --- ストック一覧 --- */
+let stockTier = -1, editStockIdx = -1;
+function monCard(m, extraLine){
+  return `
+    <span class="tier badge">${TIERS[m.tier].min}分</span>
+    <span class="ttype">${m.type!=null?TYPES[m.type].icon:''}</span>
+    <img src="${m.url}">
+    <div class="stats">❤️${m.maxHp} ⚔️${m.atk}<br>🛡️${m.def} 💨${m.spd}${extraLine||''}</div>`;
+}
+function openStockOverlay(tier){
+  stockTier = tier;
+  const arr = S.stock[tier];
+  $('stock-title').textContent = T('stockOf',{min:TIERS[tier].min, n:arr.length, max:STOCK_MAX});
+  const g = $('stock-grid'); g.innerHTML='';
+  arr.forEach((m,i)=>{
+    const d = document.createElement('div');
+    d.className = 'slot';
+    const sel = S.deckSel[tier]===i;
+    d.innerHTML = monCard(m, sel?'<br>'+T('inDeck'):'');
+    if(sel) d.style.outline = '3px solid #f5d90a';
+    d.addEventListener('click', ()=>openEditMenu(tier, i));
+    g.appendChild(d);
+  });
+  if(arr.length < STOCK_MAX){
+    const d = document.createElement('div');
+    d.className = 'slot';
+    d.innerHTML = `<div class="empty-box">＋</div><div class="stats">${T('newDraw')}</div>`;
+    d.addEventListener('click', ()=>{ closeStockOverlay(); startDrawing(tier); });
+    g.appendChild(d);
+  }
+  $('stock-overlay').classList.add('show');
+}
+function closeStockOverlay(){ $('stock-overlay').classList.remove('show'); }
+/* --- モンスター操作メニュー --- */
+function openEditMenu(tier, idx){
+  stockTier = tier; editStockIdx = idx;
+  const m = S.stock[tier][idx];
+  $('edit-title').textContent = T('editTitle',{n:baseName(m)});
+  closeStockOverlay();
+  $('edit-overlay').classList.add('show');
+}
+function renameMon(){
+  const m = S.stock[stockTier][editStockIdx];
+  if(!m) return;
+  const nv = prompt(T('renamePrompt'), baseName(m));
+  if(nv===null) return;
+  const cleaned = escName(nv);
+  if(cleaned){ m.name = cleaned; saveStock(); renderDeck(); }
+  $('edit-title').textContent = T('editTitle',{n:baseName(m)});
+}
+function closeEditMenu(){
+  $('edit-overlay').classList.remove('show');
+  openStockOverlay(stockTier);
+}
+function selectMon(){
+  $('edit-overlay').classList.remove('show');
+  S.deckSel[stockTier] = editStockIdx;
+  saveStock();
+  renderDeck();
+}
+function editSlot(keepArt){
+  $('edit-overlay').classList.remove('show');
+  startDrawing(stockTier, keepArt, editStockIdx);
+}
+function deleteSlot(){
+  $('edit-overlay').classList.remove('show');
+  const arr = S.stock[stockTier];
+  arr.splice(editStockIdx, 1);
+  const sel = S.deckSel[stockTier];
+  if(sel!=null){
+    if(sel===editStockIdx) S.deckSel[stockTier] = arr.length ? 0 : null;
+    else if(sel>editStockIdx) S.deckSel[stockTier] = sel-1;
+  }
+  saveStock();
+  renderDeck();
+  openStockOverlay(stockTier);
+}
+
+/* ============ お絵描き ============ */
+const paint = $('paint'), pctx = paint.getContext('2d', {willReadFrequently:true});
+let brushSize = 5, brushColor = 0, toolMode = 'pen';
+let drawing = false, lastPt = null, lastMove = 0;
+let undoStack = [];
+
+function pos(e){
+  const r = paint.getBoundingClientRect();
+  return {x:(e.clientX-r.left)*paint.width/r.width, y:(e.clientY-r.top)*paint.height/r.height};
+}
+paint.addEventListener('pointerdown', e=>{
+  e.preventDefault();
+  paint.setPointerCapture(e.pointerId);
+  if(undoStack.length>14) undoStack.shift();
+  undoStack.push(pctx.getImageData(0,0,400,400));
+  const p = pos(e);
+  if(toolMode === 'fill'){
+    floodFill(p.x, p.y);
+    sfx.draw();
+    return;
+  }
+  drawing = true; lastPt = p;
+  drawSeg(lastPt, lastPt);
+});
+paint.addEventListener('pointermove', e=>{
+  if(!drawing) return;
+  const p = pos(e); drawSeg(lastPt, p); lastPt = p;
+});
+window.addEventListener('pointerup', ()=>{
+  if(drawing){ drawing=false; sfx.draw(); }
+});
+function drawSeg(a,b){
+  lastMove = Date.now();
+  pctx.save();
+  pctx.lineCap='round'; pctx.lineJoin='round';
+  if(toolMode === 'eraser'){
+    pctx.globalCompositeOperation='destination-out';
+    pctx.lineWidth = 30;
+  }else{
+    pctx.globalCompositeOperation='source-over';
+    pctx.strokeStyle = PALETTE[brushColor].hex;
+    pctx.lineWidth = brushSize;
+  }
+  pctx.beginPath(); pctx.moveTo(a.x,a.y); pctx.lineTo(b.x+0.01,b.y+0.01); pctx.stroke();
+  pctx.restore();
+}
+function floodFill(sx, sy){
+  sx = Math.round(sx); sy = Math.round(sy);
+  if(sx<0 || sy<0 || sx>=400 || sy>=400) return;
+  const img = pctx.getImageData(0,0,400,400), d = img.data;
+  const si = (sy*400+sx)*4;
+  const t = [d[si], d[si+1], d[si+2], d[si+3]];
+  const [fr,fg,fb] = PALETTE[brushColor].rgb;
+  if(t[3]>200 && Math.abs(t[0]-fr)<10 && Math.abs(t[1]-fg)<10 && Math.abs(t[2]-fb)<10) return;
+  const match = i => {
+    const dr=d[i]-t[0], dg=d[i+1]-t[1], db=d[i+2]-t[2], da=d[i+3]-t[3];
+    return dr*dr + dg*dg + db*db + da*da < 4900;
+  };
+  const seen = new Uint8Array(400*400);
+  const stack = [sy*400+sx];
+  seen[sy*400+sx] = 1;
+  while(stack.length){
+    const p = stack.pop(), i = p*4;
+    d[i]=fr; d[i+1]=fg; d[i+2]=fb; d[i+3]=255;
+    const x = p%400, y = (p-x)/400;
+    if(x>0)  { const q=p-1;   if(!seen[q] && match(q*4)){seen[q]=1; stack.push(q);} }
+    if(x<399){ const q=p+1;   if(!seen[q] && match(q*4)){seen[q]=1; stack.push(q);} }
+    if(y>0)  { const q=p-400; if(!seen[q] && match(q*4)){seen[q]=1; stack.push(q);} }
+    if(y<399){ const q=p+400; if(!seen[q] && match(q*4)){seen[q]=1; stack.push(q);} }
+  }
+  pctx.putImageData(img,0,0);
+}
+function makeThumb(){
+  const c = document.createElement('canvas');
+  c.width = 200; c.height = 200;
+  c.getContext('2d').drawImage(paint, 0, 0, 200, 200);
+  return c.toDataURL();
+}
+$('undo-btn').addEventListener('click', ()=>{
+  if(undoStack.length){ pctx.putImageData(undoStack.pop(),0,0); }
+});
+document.querySelectorAll('.tool[data-size]').forEach(btn=>{
+  btn.addEventListener('click', ()=>{
+    document.querySelectorAll('.tool[data-size]').forEach(b=>b.classList.remove('sel'));
+    btn.classList.add('sel');
+    const s = +btn.dataset.size;
+    if(s === -1) toolMode = 'eraser';
+    else if(s === -2) toolMode = 'fill';
+    else { toolMode = 'pen'; brushSize = s; }
+  });
+});
+function renderPalette(){
+  const pal = $('palette'); pal.innerHTML='';
+  PALETTE.forEach((c,i)=>{
+    const d = document.createElement('div');
+    d.className = 'swatch' + (i===brushColor?' sel':'');
+    d.style.background = c.hex;
+    d.title = c.name;
+    d.addEventListener('click', ()=>{
+      brushColor = i;
+      if(toolMode === 'eraser'){
+        toolMode = 'pen';
+        document.querySelectorAll('.tool[data-size]').forEach(b=>b.classList.toggle('sel', +b.dataset.size===brushSize));
+      }
+      renderPalette();
+    });
+    pal.appendChild(d);
+  });
+}
+
+/* ============ 絵の解析 ============ */
+function analyzeArt(ctx){
+  const img = ctx.getImageData(0,0,400,400).data;
+  const colorCount = new Array(PALETTE.length).fill(0);
+  let covered=0, total=0, minX=400, maxX=-1, minY=400, maxY=-1;
+  for(let y=0; y<400; y+=4){
+    for(let x=0; x<400; x+=4){
+      total++;
+      const i = (y*400+x)*4;
+      if(img[i+3] > 30){
+        covered++;
+        if(x<minX)minX=x; if(x>maxX)maxX=x; if(y<minY)minY=y; if(y>maxY)maxY=y;
+        let best=0, bd=1e9;
+        for(let c=0; c<PALETTE.length; c++){
+          const [r,g,b] = PALETTE[c].rgb;
+          const d2 = (img[i]-r)**2 + (img[i+1]-g)**2 + (img[i+2]-b)**2;
+          if(d2<bd){bd=d2; best=c;}
+        }
+        colorCount[best]++;
+      }
+    }
+  }
+  if(covered === 0){
+    return {type:ri(0,4), weights:{hp:.5,atk:.5,def:.5,spd:.5}, reason:'reason_blank'};
+  }
+  const typeScore = new Array(TYPES.length).fill(0);
+  colorCount.forEach((n,c)=> typeScore[COLOR_TYPE[c]] += n * COLOR_WEIGHT[c]);
+  let type = 0, ts = -1;
+  typeScore.forEach((v,i)=>{ if(v>ts){ts=v; type=i;} });
+  const covRatio = covered/total;
+  const bboxArea = (maxX-minX+4)*(maxY-minY+4);
+  const bboxRatio = bboxArea/(400*400);
+  const density = Math.min(1, covered*16/bboxArea);
+  const warm = (colorCount[1]+colorCount[4])/covered;
+  const bright = (colorCount[6]+colorCount[7]+colorCount[8])/covered;
+  const weights = {
+    hp:  clamp01(bboxRatio*1.8),
+    atk: clamp01(warm*1.6 + covRatio*0.3),
+    def: clamp01(density*1.1),
+    spd: clamp01((1-density)*0.8 + bright*0.8),
+  };
+  const top = Object.entries(weights).sort((a,b)=>b[1]-a[1])[0][0];
+  return {type, weights, reason:'reason_'+top};
+}
+function rollStats(tierIdx, weights){
+  const t = TIERS[tierIdx];
+  const roll = (range, w) => Math.round(range[0] + (range[1]-range[0]) * clamp01(0.35*Math.random() + 0.65*w));
+  return {
+    hp: roll(t.hp, weights.hp), atk: roll(t.atk, weights.atk),
+    def: roll(t.def, weights.def), spd: roll(t.spd, weights.spd),
+  };
+}
+
+/* ============ お絵描きフェーズ ============ */
+function startDrawing(tier, keepArt=false, stockIdx=null){
+  try{ AC = AC || new (window.AudioContext||window.webkitAudioContext)(); }catch(e){}
+  if(stockIdx===null && S.stock[tier].length>=STOCK_MAX) return; // 満杯ガード
+  S.drawTier = tier; S.drawStockIdx = stockIdx;
+  const t = TIERS[tier];
+  pctx.clearRect(0,0,400,400);
+  if(keepArt && stockIdx!==null && S.stock[tier][stockIdx]){
+    // 既存の絵を読み込んで続きから編集
+    const img = new Image();
+    img.onload = ()=>pctx.drawImage(img,0,0,400,400);
+    img.src = S.stock[tier][stockIdx].url;
+  }
+  undoStack = [];
+  closeStockOverlay();
+  show('draw-screen');
+  renderPalette();
+  $('draw-tier').textContent = T('drawTier',{min:t.min});
+  $('draw-stats').textContent = `❤️${t.hp[0]}〜${t.hp[1]} ⚔️${t.atk[0]}〜${t.atk[1]} 🛡️${t.def[0]}〜${t.def[1]} 💨${t.spd[0]}〜${t.spd[1]}`;
+  $('draw-msg').textContent = T('drawMsg',{min:t.min});
+  startTimer(t.min * 60);
+}
+function startTimer(sec){
+  clearInterval(S.timerId);
+  S.timeMax = sec; S.timeLeft = sec;
+  $('timer-bar').style.width = '100%';
+  $('time-text').textContent = fmtTime(sec);
+  S.timerId = setInterval(()=>{
+    const penActive = drawing && (Date.now() - lastMove < 250);
+    if(penActive) S.timeLeft -= 0.1;
+    $('timer-bar').style.width = Math.max(0, S.timeLeft/S.timeMax*100) + '%';
+    $('time-text').textContent = fmtTime(S.timeLeft);
+    if(S.timeLeft <= 0) finishDrawing();
+  }, 100);
+}
+function finishDrawing(){
+  clearInterval(S.timerId);
+  drawing = false;
+  const tier = S.drawTier;
+  let m;
+  if(S.drawStockIdx!==null && S.stock[tier][S.drawStockIdx]){
+    m = S.stock[tier][S.drawStockIdx]; // 既存モンスターを上書き編集
+  }else{
+    m = blankSlot(tier);
+    const n = S.stock[tier].length;
+    m.name = n>0 ? T('defaultNameN',{min:TIERS[tier].min, n:n+1}) : T('defaultName',{min:TIERS[tier].min});
+    S.stock[tier].push(m);
+    S.drawStockIdx = S.stock[tier].length - 1;
+  }
+  m.url = paint.toDataURL();
+  m.thumb = makeThumb(); // 通信用の縮小版（オンライン対戦のデッキ交換を軽くする）
+  const a = analyzeArt(pctx);
+  const st = rollStats(m.tier, a.weights);
+  m.type = a.type;
+  m.hp = st.hp; m.maxHp = st.hp; m.atk = st.atk; m.def = st.def; m.spd = st.spd;
+  m.moves = genMoves(m);
+  S.deckSel[tier] = S.drawStockIdx; // 完成したコをデッキに入れる
+  saveStock();
+  sfx.reveal();
+  const oi = $('overlay-img');
+  oi.style.display='block';
+  const ox = oi.getContext('2d'); ox.clearRect(0,0,400,400); ox.drawImage(paint,0,0);
+  overlay(
+    T('revType',{i:TYPES[m.type].icon, t:typeName(m.type)}),
+    `<i>${T(a.reason)}</i><br>
+     <div class="statline"><span>${T('statL_hp')}</span><b>${st.hp}</b></div>
+     <div class="statline"><span>${T('statL_atk')}</span><b>${st.atk}</b></div>
+     <div class="statline"><span>${T('statL_def')}</span><b>${st.def}</b></div>
+     <div class="statline"><span>${T('statL_spd')}</span><b>${st.spd}</b></div>
+     <div class="movelist"><b>${T('learned')}</b><br>${m.moves.map(mv=>`${CAT_ICON[mv.cat]} ${trMove(mv.name)}　<small>${moveDesc(mv)}</small>`).join('<br>')}</div>
+     <div style="margin-top:10px;">${T('nameLabel')}
+       <input id="name-input" maxlength="14" value="${baseName(m).replace(/"/g,'')}"
+         style="font-family:inherit; font-size:15px; padding:6px 10px; border:3px solid var(--ink); border-radius:10px; width:60%;">
+     </div>`,
+    T('backDeck'),
+    ()=>{
+      const inp = $('name-input');
+      const nv = inp ? escName(inp.value) : '';
+      if(nv) m.name = nv;
+      saveStock();
+      $('overlay-img').style.display='none';
+      show('deck-screen'); renderDeck();
+    }
+  );
+}
+
+/* ============ 敵生成 ============ */
+function genEnemyCanvas(tierIdx){
+  const c = document.createElement('canvas');
+  c.width=400; c.height=400;
+  const x = c.getContext('2d');
+  const hue = ri(0,360);
+  x.lineWidth = 5; x.lineCap='round';
+  x.strokeStyle = `hsl(${hue},60%,30%)`;
+  x.fillStyle = `hsl(${hue},70%,80%)`;
+  const cx=200, cy=210, base=rand(80,115);
+  const pts=[], n=10;
+  for(let i=0;i<n;i++){
+    const a = i/n*Math.PI*2;
+    const r = base * rand(0.75,1.3);
+    pts.push([cx+Math.cos(a)*r, cy+Math.sin(a)*r]);
+  }
+  x.beginPath();
+  x.moveTo((pts[0][0]+pts[n-1][0])/2,(pts[0][1]+pts[n-1][1])/2);
+  for(let i=0;i<n;i++){
+    const nx=pts[(i+1)%n];
+    x.quadraticCurveTo(pts[i][0],pts[i][1],(pts[i][0]+nx[0])/2,(pts[i][1]+nx[1])/2);
+  }
+  x.closePath(); x.fill(); x.stroke();
+  const spikes = tierIdx + 1;
+  x.fillStyle = `hsl(${hue},60%,45%)`;
+  for(let i=0;i<spikes;i++){
+    const a = rand(0,Math.PI*2);
+    const r1 = base*1.05, r2 = base*1.45;
+    x.beginPath();
+    x.moveTo(cx+Math.cos(a-0.12)*r1, cy+Math.sin(a-0.12)*r1);
+    x.lineTo(cx+Math.cos(a)*r2, cy+Math.sin(a)*r2);
+    x.lineTo(cx+Math.cos(a+0.12)*r1, cy+Math.sin(a+0.12)*r1);
+    x.closePath(); x.fill(); x.stroke();
+  }
+  x.strokeStyle = `hsl(${hue},60%,30%)`;
+  const limbs = ri(2,5);
+  for(let i=0;i<limbs;i++){
+    const a = rand(0.2,Math.PI-0.2)+ (i%2?0:Math.PI);
+    let px_=cx+Math.cos(a)*base, py=cy+Math.sin(a)*base;
+    x.beginPath(); x.moveTo(px_,py);
+    for(let j=0;j<3;j++){ px_+=rand(-38,38); py+=rand(-10,45); x.lineTo(px_,py); }
+    x.stroke();
+  }
+  const ew = rand(26,42), gap=rand(34,60), ey=cy-base*0.35;
+  [[cx-gap,ey],[cx+gap,ey]].forEach(([ex2,ey2])=>{
+    x.fillStyle='#fff'; x.beginPath(); x.arc(ex2,ey2,ew/2,0,7); x.fill(); x.stroke();
+    x.fillStyle='#222'; x.beginPath(); x.arc(ex2+rand(-6,6),ey2+rand(-4,6),ew/5,0,7); x.fill();
+  });
+  x.beginPath();
+  const my=cy+base*0.15;
+  x.moveTo(cx-30,my);
+  x.quadraticCurveTo(cx, my+rand(-18,30), cx+30, my);
+  x.stroke();
+  return c;
+}
+function genEnemyDeck(){
+  return TIERS.map((t,i)=>{
+    const w = {hp:Math.random(), atk:Math.random(), def:Math.random(), spd:Math.random()};
+    const st = rollStats(i, w);
+    const m = {
+      tier:i, url:genEnemyCanvas(i).toDataURL(), type:ri(0,TYPES.length-1),
+      name:pick(TA('nameA'))+pick(TA('nameB')),
+      hp:st.hp, maxHp:st.hp, atk:st.atk, def:st.def, spd:st.spd, ko:false,
+      moves:[], stg:{atk:0,def:0,spd:0}, status:null,
+    };
+    m.moves = genMoves(m);
+    return m;
+  });
+}
+
+/* ============ バトル ============ */
+function startBattle(){
+  S.deck.forEach(m=>{
+    m.hp = m.maxHp; m.ko = false; m.stg = {atk:0,def:0,spd:0}; m.status = null;
+    m.moves.forEach(mv=>{ if(mv.cat==='heal') mv.uses = mv.maxUses; });
+  });
+  S.eDeck = genEnemyDeck();
+  S.busy=true; S.inputOn=false; S.turn=0;
+  S.eIdx = ri(0,5);
+  $('blog').innerHTML = '';
+  show('battle-screen');
+  log(T('battle_start'));
+  openBench('starter');
+}
+function log(t){
+  if(S.recording) S.rec.push(t); // PvPホストはログを相手にも送る
+  const d = document.createElement('div'); d.textContent = t;
+  const b = $('blog'); b.appendChild(d); b.scrollTop = b.scrollHeight;
+}
+function drawTo(canvasId, url){
+  const c = $(canvasId), x = c.getContext('2d');
+  x.clearRect(0,0,400,400);
+  const img = new Image();
+  img.onload = ()=>x.drawImage(img,0,0,400,400);
+  img.src = url;
+}
+function condText(m){
+  const parts = [];
+  if(m.status) parts.push(`${KIND_ICON[m.status.kind]}${KIND_JP[m.status.kind]}`);
+  for(const k of ['atk','def','spd']){
+    if(m.stg[k]!==0) parts.push(`${k==='atk'?'⚔️':k==='def'?'🛡️':'💨'}${m.stg[k]>0?'+':''}${m.stg[k]}`);
+  }
+  return parts.join(' ') || '　';
+}
+function updateBattleUI(){
+  const p = PM(), e = EM();
+  $('b-score-p').textContent = T('scoreYou',{n:aliveCount(S.deck)});
+  $('b-score-e').textContent = T('scoreOpp',{n:aliveCount(S.eDeck)});
+  drawTo('p-img', p.url); drawTo('e-img', e.url);
+  $('p-name').textContent = T('nameMin',{n:p.name, min:TIERS[p.tier].min});
+  $('e-name').textContent = T('nameMin',{n:e.name, min:TIERS[e.tier].min});
+  $('p-cond').textContent = condText(p);
+  $('e-cond').textContent = condText(e);
+  $('p-type').textContent = TYPES[p.type].icon;
+  $('e-type').textContent = TYPES[e.type].icon;
+  $('p-hp').style.width = Math.max(0,p.hp/p.maxHp*100)+'%';
+  $('e-hp').style.width = Math.max(0,e.hp/e.maxHp*100)+'%';
+  $('p-hp').style.background = p.hp/p.maxHp>0.35 ? '#27ae60' : '#e74c3c';
+  $('e-hp').style.background = e.hp/e.maxHp>0.35 ? '#27ae60' : '#e74c3c';
+  $('p-hpnum').textContent = `${Math.max(0,Math.ceil(p.hp))} / ${p.maxHp}`;
+  $('e-hpnum').textContent = `${Math.max(0,Math.ceil(e.hp))} / ${e.maxHp}`;
+  renderBench('p-bench', S.deck, S.pIdx);
+  renderBench('e-bench', S.eDeck, S.eIdx);
+  renderMoves();
+}
+function renderBench(id, deck, activeIdx){
+  const el = $(id); el.innerHTML='';
+  deck.forEach((m,i)=>{
+    const d = document.createElement('div');
+    d.className = 'bm' + (i===activeIdx?' active':'') + (m.ko?' ko':'');
+    d.innerHTML = `<img src="${m.url}">`;
+    d.title = `${m.name} ${Math.max(0,Math.ceil(m.hp))}/${m.maxHp}`;
+    el.appendChild(d);
+  });
+}
+function renderMoves(){
+  const a = $('actions'); a.innerHTML='';
+  PM().moves.forEach((mv,i)=>{
+    const b = document.createElement('button');
+    b.innerHTML = `${CAT_ICON[mv.cat]} ${trMove(mv.name)}<small>${moveDesc(mv)}</small>`;
+    b.disabled = !S.inputOn || (mv.cat==='heal' && mv.uses<=0);
+    b.addEventListener('click', ()=>playerAct(i));
+    a.appendChild(b);
+  });
+  document.querySelector('#switch-row button').disabled = !S.inputOn;
+}
+function setInput(on){
+  S.inputOn = on;
+  renderMoves();
+}
+/* 敵AI：状況で技を選ぶ */
+const HINTS = {
+  atk:'👀 {n} から殺気を感じる…！', def:'👀 {n} は身構えているようだ…',
+  heal:'👀 {n} は傷を気にしている…', buff:'👀 {n} は力を溜めたそうにしている…',
+  debuff:'👀 {n} がいやらしい目でこちらを見ている…', status:'👀 {n} があやしい動きをしている…',
+};
+function decideEnemy(){
+  const e = EM(), p = PM();
+  const scores = e.moves.map(mv=>{
+    if(mv.cat==='atk') return mv.pow*10*typeMult(e.type,p.type)*(mv.acc||1);
+    if(mv.cat==='def') return 5;
+    if(mv.cat==='heal') return (mv.uses>0 && e.hp/e.maxHp<0.45) ? 20 : 0.3;
+    if(mv.cat==='buff') return e.stg[mv.sub]>=3 ? 0.3 : (S.turn<3 ? 9 : 4);
+    if(mv.cat==='debuff') return p.stg[mv.sub]<=-3 ? 0.3 : 6;
+    return p.status ? 0.2 : 9; // status
+  });
+  const tot = scores.reduce((a,b)=>a+b,0);
+  let r = Math.random()*tot, idx = 0;
+  for(let i=0;i<scores.length;i++){ r-=scores[i]; if(r<=0){idx=i; break;} }
+  S.eNext = e.moves[idx];
+  const cats = ['atk','def','heal','buff','debuff','status'];
+  const shown = Math.random()<0.65 ? S.eNext.cat : pick(cats.filter(c=>c!==S.eNext.cat));
+  $('hint').textContent = T('hint_'+shown, {n:e.name});
+}
+/* ダメージ・回避 */
+function calcDmg(a, d, pow){
+  const m = typeMult(a.type, d.type);
+  const base = effAtk(a) * 1.9 * pow * rand(0.85,1.15);
+  const reduced = base * 100 / (100 + effDef(d)*3);
+  return {dmg: Math.max(1, Math.round(reduced * m)), m};
+}
+function dodgeP(a, d){
+  return Math.max(0.02, Math.min(0.40, 0.06 + (effSpd(d)-effSpd(a))*0.015));
+}
+
+/* ---- 技の実行 ---- */
+async function execMove(side, mv){
+  const me = side==='p' ? PM() : EM();
+  const foe = side==='p' ? EM() : PM();
+  const meCard = side==='p' ? 'f-player' : 'f-enemy';
+  const foeCard = side==='p' ? 'f-enemy' : 'f-player';
+  const foeDef = side==='p' ? S.eDef : S.pDef;
+  if(me.ko) return;
+  const mvN = trMove(mv.name);
+  // まひチェック
+  if(me.status && me.status.kind==='para' && Math.random()<0.3){
+    log(T('para_cant',{n:me.name}));
+    return;
+  }
+  if(mv.cat==='def'){
+    log(T('def_use',{n:me.name, m:mvN})); sfx.guard();
+    return;
+  }
+  if(mv.cat==='atk'){
+    if(foe.ko) return;
+    if(mv.acc<1 && Math.random()>mv.acc){
+      log(T('atk_miss',{n:me.name, m:mvN}));
+      return;
+    }
+    if(foeDef){
+      const r = calcDmg(me, foe, mv.pow*0.25);
+      foe.hp -= r.dmg;
+      const counter = Math.max(1, Math.round(effAtk(foe)*0.5));
+      me.hp -= counter;
+      log(T('atk_blocked',{f:foe.name, n:me.name, m:mvN, d:r.dmg, c:counter}));
+      shake(foeCard); shake(meCard); sfx.guard();
+    }else{
+      if(Math.random() < dodgeP(me, foe)){
+        log(T('atk_dodge',{n:me.name, m:mvN, f:foe.name}));
+        return;
+      }
+      const r = calcDmg(me, foe, mv.pow);
+      foe.hp -= r.dmg;
+      log(T('atk_hit',{n:me.name, m:mvN, d:r.dmg, x:multNote(r.m)}));
+      shake(foeCard); sfx.hit();
+    }
+    return;
+  }
+  if(mv.cat==='heal'){
+    if(mv.uses<=0){ log(T('heal_empty',{n:me.name, m:mvN})); return; }
+    mv.uses--;
+    const amt = Math.min(Math.round(me.maxHp*0.35), me.maxHp-me.hp);
+    me.hp += amt;
+    log(T('heal_use',{n:me.name, m:mvN, d:amt, u:mv.uses})); sfx.heal();
+    return;
+  }
+  if(mv.cat==='buff'){
+    if(me.stg[mv.sub]>=3){ log(T('buff_max',{n:me.name, s:statName(mv.sub)})); return; }
+    me.stg[mv.sub]++;
+    log(T('buff_use',{n:me.name, m:mvN, s:statName(mv.sub)})); sfx.charge();
+    return;
+  }
+  if(mv.cat==='debuff'){
+    if(foe.ko) return;
+    if(Math.random()>0.9){ log(T('debuff_miss',{n:me.name, m:mvN})); return; }
+    if(foe.stg[mv.sub]<=-3){ log(T('debuff_floor',{f:foe.name, s:statName(mv.sub)})); return; }
+    foe.stg[mv.sub]--;
+    log(T('debuff_use',{n:me.name, m:mvN, f:foe.name, s:statName(mv.sub)})); sfx.debuff();
+    return;
+  }
+  if(mv.cat==='status'){
+    if(foe.ko) return;
+    if(foe.status){ log(T('st_already',{n:me.name, m:mvN, f:foe.name})); return; }
+    if(Math.random()>0.8){ log(T('st_miss',{n:me.name, m:mvN})); return; }
+    foe.status = {kind:mv.kind, turns:4};
+    log(T('st_apply',{i:KIND_ICON[mv.kind], n:me.name, m:mvN, f:foe.name, k:kindName(mv.kind)}));
+    sfx.debuff();
+    return;
+  }
+}
+/* ---- 毎ターン終了時：どく・やけど ---- */
+function endOfTurnTicks(){
+  for(const [m, card] of [[PM(),'f-player'],[EM(),'f-enemy']]){
+    if(m.ko || !m.status) continue;
+    if(m.status.kind==='poison'){
+      const d = Math.max(1, Math.round(m.maxHp*0.08));
+      m.hp -= d; log(T('dot_poison',{n:m.name, d})); shake(card);
+    }else if(m.status.kind==='burn'){
+      const d = Math.max(1, Math.round(m.maxHp*0.05));
+      m.hp -= d; log(T('dot_burn',{n:m.name, d})); shake(card);
+    }
+    m.status.turns--;
+    if(m.status.turns<=0){
+      log(T('st_cured',{n:m.name, k:kindName(m.status.kind)}));
+      m.status = null;
+    }
+  }
+}
+/* ---- KO処理。'end'ならバトル終了済み ---- */
+function koSweep(){
+  const pM = PM(), eM = EM();
+  if(eM.hp<=0 && !eM.ko){
+    eM.hp=0; eM.ko=true;
+    log(T('ko_enemy',{n:eM.name})); sfx.ko();
+  }
+  if(pM.hp<=0 && !pM.ko){
+    pM.hp=0; pM.ko=true;
+    log(T('ko_mine',{n:pM.name})); sfx.ko();
+  }
+  updateBattleUI();
+  if(aliveCount(S.eDeck)===0){ winBattle(); return 'end'; }
+  if(aliveCount(S.deck)===0){ loseBattle(); return 'end'; }
+  if(EM().ko){
+    S.eIdx = enemyPickNext();
+    EM().stg = {atk:0,def:0,spd:0};
+    log(T('send_next',{n:EM().name, min:TIERS[EM().tier].min}));
+    updateBattleUI();
+  }
+  return null;
+}
+
+/* ---- ターン進行 ---- */
+async function playerAct(i){
+  if(S.busy || !S.inputOn) return;
+  const pMv = PM().moves[i];
+  if(NET.mode !== 'solo'){ submitAction({kind:'move', i}); return; }
+  S.busy = true; setInput(false);
+  const eMv = S.eNext;
+  S.pDef = pMv.cat==='def';
+  S.eDef = eMv.cat==='def';
+  log(T('turn_header',{a:PM().name, x:trMove(pMv.name), b:EM().name, y:trMove(eMv.name)}));
+  await resolveTurn(pMv, eMv);
+}
+async function resolveTurn(pMv, eMv){
+  S.turn++;
+  const pFirst = effSpd(PM())===effSpd(EM()) ? Math.random()<0.5 : effSpd(PM())>effSpd(EM());
+  const seq = pFirst ? [['p',pMv],['e',eMv]] : [['e',eMv],['p',pMv]];
+  for(const [side, mv] of seq){
+    const actor = side==='p' ? PM() : EM();
+    if(actor.ko) continue; // 先に倒されたら行動できない
+    await sleep(500);
+    await execMove(side, mv);
+    updateBattleUI();
+    if(koSweep()==='end') return;
+  }
+  await sleep(450);
+  endOfTurnTicks();
+  updateBattleUI();
+  if(koSweep()==='end') return;
+  if(PM().ko){ openBench('forced'); return; }
+  nextTurn();
+}
+function nextTurn(){
+  decideEnemy();
+  S.busy = false;
+  setInput(true);
+}
+function enemyPickNext(){
+  const alive = S.eDeck.map((m,i)=>m.ko?null:i).filter(i=>i!==null);
+  const adv = alive.filter(i=>typeMult(S.eDeck[i].type, PM().type) > 1);
+  if(adv.length && Math.random()<0.6) return pick(adv);
+  return pick(alive);
+}
+/* ---- こうたい（ターン消費） ---- */
+async function doSwitch(idx){
+  closeBench();
+  S.busy = true; setInput(false);
+  const eMv = S.eNext;
+  S.pIdx = idx;
+  PM().stg = {atk:0,def:0,spd:0};
+  log(T('switch_self',{n:PM().name}));
+  updateBattleUI();
+  await sleep(500);
+  S.pDef = false;
+  S.eDef = eMv.cat==='def';
+  await execMove('e', eMv);
+  updateBattleUI();
+  if(koSweep()==='end') return;
+  await sleep(400);
+  endOfTurnTicks();
+  updateBattleUI();
+  if(koSweep()==='end') return;
+  if(PM().ko){ openBench('forced'); return; }
+  nextTurn();
+}
+
+/* ---- ベンチ（先発／こうたい／強制交代） ---- */
+function openBench(mode){
+  if(mode==='switch' && (S.busy || !S.inputOn)) return;
+  S.benchMode = mode;
+  updateBenchTitle();
+  $('bench-cancel').style.display = mode==='switch' ? '' : 'none';
+  const g = $('bench-grid'); g.innerHTML='';
+  S.deck.forEach((m,i)=>{
+    const selectable = !m.ko && (mode!=='switch' || i!==S.pIdx);
+    const d = document.createElement('div');
+    d.className = 'slot' + (selectable?'':' done');
+    d.style.opacity = selectable ? 1 : .35;
+    d.innerHTML = `
+      <span class="tier badge">${TIERS[m.tier].min}分</span>
+      <span class="ttype">${TYPES[m.type].icon}</span>
+      <img src="${m.url}">
+      <div class="stats">❤️${Math.max(0,Math.ceil(m.hp))}/${m.maxHp}<br>⚔️${m.atk} 🛡️${m.def} 💨${m.spd}${m.ko?' ✖KO':''}${m.status?' '+KIND_ICON[m.status.kind]:''}</div>`;
+    if(selectable) d.addEventListener('click', ()=>benchPick(i));
+    g.appendChild(d);
+  });
+  $('bench-overlay').classList.add('show');
+  startBenchTimer(); // PvPの先発・強制交代は30秒制限（同時選択）
+}
+function benchPick(i){
+  const m = S.deck[i];
+  if(!m || m.ko) return;
+  if(S.benchMode==='switch' && i===S.pIdx) return;
+  stopBenchTimer();
+  if(S.benchMode==='switch'){
+    if(NET.mode==='solo') doSwitch(i);
+    else submitAction({kind:'switch', idx:i});
+  }else if(S.benchMode==='starter'){
+    closeBench();
+    S.pIdx = i;
+    PM().stg = {atk:0,def:0,spd:0};
+    log(T('go_mon',{n:PM().name}));
+    updateBattleUI();
+    if(NET.mode==='solo') nextTurn();
+    else netStarterChosen(i);
+  }else{ // forced
+    closeBench();
+    S.pIdx = i;
+    PM().stg = {atk:0,def:0,spd:0};
+    updateBattleUI();
+    if(NET.mode==='solo'){
+      log(T('go_mon',{n:PM().name}));
+      nextTurn();
+    }else netForcedChosen(i);
+  }
+}
+/* --- 選択制限タイマー（PvPの先発・強制交代：30秒） --- */
+const BENCH_LIMIT = 30;
+function updateBenchTitle(){
+  const base = S.benchMode==='starter' ? T('benchStarter')
+    : S.benchMode==='forced' ? T('benchForced') : T('benchSwitch');
+  const timed = NET.mode!=='solo' && S.benchMode!=='switch' && S.benchTimer;
+  $('bench-title').textContent = base + (timed ? '（'+T('timeLeft',{s:S.benchLeft})+'）' : '');
+}
+function startBenchTimer(){
+  stopBenchTimer();
+  if(NET.mode==='solo' || S.benchMode==='switch') return;
+  S.benchLeft = BENCH_LIMIT;
+  S.benchTimer = setInterval(()=>{
+    S.benchLeft--;
+    if(S.benchLeft<=0){
+      stopBenchTimer();
+      autoBenchPick(); // 時間切れ→ランダム選択で強制続行
+    }else updateBenchTitle();
+  }, 1000);
+  updateBenchTitle();
+}
+function stopBenchTimer(){
+  if(S.benchTimer){ clearInterval(S.benchTimer); S.benchTimer=null; }
+}
+function autoBenchPick(){
+  const cands = S.deck.map((m,i)=>(!m.ko && (S.benchMode!=='switch'||i!==S.pIdx)) ? i : null).filter(v=>v!==null);
+  if(!cands.length) return;
+  log(T('autoPick'));
+  benchPick(pick(cands));
+}
+function closeBench(){
+  stopBenchTimer();
+  $('bench-overlay').classList.remove('show');
+}
+
+/* ---- 勝敗 ---- */
+function overlay(big, text, btnText, cb, btn2Text, cb2){
+  $('overlay-big').innerHTML = big;
+  $('overlay-text').innerHTML = text;
+  $('overlay-btn').textContent = btnText;
+  $('overlay-btn').onclick = ()=>{ $('overlay').classList.remove('show'); cb(); };
+  const b2 = $('overlay-btn2');
+  if(btn2Text){
+    b2.style.display=''; b2.textContent = btn2Text;
+    b2.onclick = ()=>{ $('overlay').classList.remove('show'); cb2(); };
+  }else b2.style.display='none';
+  $('overlay').classList.add('show');
+}
+function winBattle(){
+  sfx.win();
+  if(NET.mode !== 'solo'){
+    S.pvpWon = true;
+    setTimeout(()=>overlay(T('winTitle'), T('pvpWinText'), T('btnSteal'), openStealPicker), 600);
+    return;
+  }
+  setTimeout(()=>overlay(T('winTitle'),
+    T('winText',{n:aliveCount(S.deck)}),
+    T('btnRematch'), rematch, T('btnNewDeck'), newDeck), 600);
+}
+function loseBattle(){
+  sfx.lose();
+  if(NET.mode !== 'solo'){
+    S.pvpLost = true;
+    setTimeout(()=>{
+      if(!S.pvpLost) return; // すでに強奪処理済み
+      netStatus(T('loseWaitSteal'));
+      $('net-cancel').style.display = 'none';
+    }, 600);
+    return;
+  }
+  setTimeout(()=>overlay(T('loseTitle'),
+    T('loseText'),
+    T('btnRematch'), rematch, T('btnNewDeck'), newDeck), 600);
+}
+function rematch(){ startBattle(); }
+function newDeck(){ resetDeck(); show('deck-screen'); }
+
+/* ============================================================
+   オンライン対戦（PeerJS / WebRTC・ホスト権威方式）
+   ・フリー対戦：公開スロットを巡回してマッチング
+   ・友人対戦：あいことば→同じルームIDに変換して1対1接続
+   ============================================================ */
+const NET = {
+  mode:'solo', peer:null, conn:null, tag:'', oppTag:'',
+  pendingHost:null, pendingGuest:null,
+  myStarter:null, oppStarter:null,
+  needA:false, needB:false,
+  origNames:null, matched:false, canceled:false,
+  helloDone:false, helloTimer:null,
+  starterTimer:null, replaceTimer:null,
+};
+const FREE_SLOTS = 5;
+function njHash(s){ let h=5381; for(const ch of s){ h=((h<<5)+h+ch.codePointAt(0))>>>0; } return h.toString(36); }
+function netSend(msg){ try{ if(NET.conn && NET.conn.open) NET.conn.send(msg); }catch(e){} }
+function deckReady(){ return S.deck.every(m=>m.url); }
+
+/* --- 入口 --- */
+function startOnline(kind){
+  if(!deckReady()) return;
+  if(typeof Peer === 'undefined'){
+    netStatus(T('netLoadFail'), T('closeBtn'));
+    return;
+  }
+  if(kind==='friend'){
+    $('word-overlay').classList.add('show');
+    $('word-input').value='';
+    setTimeout(()=>$('word-input').focus(), 50);
+  }else{
+    matchFree();
+  }
+}
+function submitWord(){
+  const w = $('word-input').value.trim();
+  if(!w) return;
+  $('word-overlay').classList.remove('show');
+  matchFriend(w);
+}
+function netStatus(text, btnText){
+  $('net-text').innerHTML = text;
+  $('net-cancel').textContent = btnText||T('cancelBtn');
+  $('net-cancel').onclick = netCancel;
+  $('net-cancel').style.display = '';
+  $('net-overlay').classList.add('show');
+}
+function netStatusHide(){ $('net-overlay').classList.remove('show'); }
+function netCancel(){
+  NET.canceled = true;
+  netTeardown();
+  netStatusHide();
+}
+function netTeardown(){
+  clearTimeout(NET.helloTimer);
+  clearTimeout(NET.starterTimer);
+  clearTimeout(NET.replaceTimer);
+  stopBenchTimer();
+  try{ if(NET.conn) NET.conn.close(); }catch(e){}
+  try{ if(NET.peer) NET.peer.destroy(); }catch(e){}
+  if(NET.origNames){ S.deck.forEach((m,i)=>{ m.name = NET.origNames[i]; }); NET.origNames=null; }
+  Object.assign(NET, {mode:'solo', peer:null, conn:null, pendingHost:null, pendingGuest:null,
+    myStarter:null, oppStarter:null, needA:false, needB:false, matched:false, helloDone:false, helloTimer:null});
+}
+function netExitToDeck(){
+  netTeardown();
+  show('deck-screen');
+  renderDeck();
+}
+function netDrop(err){
+  console.error('[rakugaki] 接続エラー/切断:', err);
+  if(NET.mode==='solo') return;
+  netTeardown();
+  netStatusHide();
+  closeBench();
+  const detail = (err && err.type) ? `<br><small style="opacity:.6">(${err.type})</small>` : '';
+  overlay(T('dropTitle'), T('dropText')+detail, T('backDeck'), ()=>{ show('deck-screen'); renderDeck(); });
+}
+
+/* --- マッチング --- */
+function matchFriend(word){
+  NET.canceled = false; NET.matched = false;
+  const id = 'rkgk-f-' + njHash('rakugaki:'+word);
+  netStatus(T('connWord',{w:word}));
+  tryJoin(id, ()=>tryHost(id, ()=>tryJoin(id, netFail)));
+}
+function matchFree(){
+  NET.canceled = false; NET.matched = false;
+  netStatus(T('searching'));
+  const slots = [...Array(FREE_SLOTS).keys()].map(i=>'rkgk-free-'+i).sort(()=>Math.random()-0.5);
+  const next = ()=>{
+    if(NET.canceled) return;
+    if(slots.length===0){ tryHost('rkgk-free-'+ri(0,FREE_SLOTS-1), netFail); return; }
+    tryJoin(slots.shift(), next);
+  };
+  next();
+}
+function cleanupPeer(){ try{ if(NET.peer) NET.peer.destroy(); }catch(e){} NET.peer=null; }
+function tryJoin(id, onFail){
+  if(NET.canceled) return;
+  cleanupPeer();
+  const p = new Peer(); NET.peer = p;
+  let failed = false;
+  const fail = ()=>{ if(failed || NET.matched) return; failed = true; onFail(); };
+  p.on('open', ()=>{
+    if(NET.canceled){ p.destroy(); return; }
+    const c = p.connect(id, {reliable:true});
+    const t = setTimeout(fail, 5000);
+    c.on('open', ()=>{ clearTimeout(t); NET.mode='guest'; bindConn(c); });
+    c.on('error', ()=>{ clearTimeout(t); fail(); });
+  });
+  p.on('error', e=>{ if(e.type==='peer-unavailable') fail(); });
+}
+function tryHost(id, onTaken){
+  if(NET.canceled) return;
+  cleanupPeer();
+  const p = new Peer(id); NET.peer = p;
+  p.on('open', ()=>{
+    if(NET.canceled){ p.destroy(); return; }
+    netStatus(T('roomWait'));
+  });
+  p.on('connection', c=>{
+    if(NET.conn){ try{ c.close(); }catch(e){} return; } // 満室
+    NET.mode='host'; bindConn(c);
+  });
+  p.on('error', e=>{ if(e.type==='unavailable-id') onTaken(); });
+}
+function netFail(){
+  cleanupPeer();
+  netStatus(T('notFound'), T('closeBtn'));
+}
+
+/* --- 接続確立とデッキ交換 --- */
+function bindConn(c){
+  NET.conn = c; NET.matched = true;
+  NET.helloDone = false;
+  NET.tag    = NET.mode==='host' ? 'P1' : 'P2';
+  NET.oppTag = NET.mode==='host' ? 'P2' : 'P1';
+  c.on('data', onNetData);
+  c.on('close', netDrop);
+  c.on('error', netDrop);
+  netStatus(T('found'));
+  // 重要：ホスト側は connection イベント時点ではまだ open していないので、open を待ってから送る
+  const sendHello = ()=>netSend({type:'hello', deck: serializeDeck()});
+  if(c.open) sendHello();
+  else c.on('open', sendHello);
+  // デッキ交換が一定時間で完了しなければ切断扱い
+  clearTimeout(NET.helloTimer);
+  NET.helloTimer = setTimeout(()=>{
+    if(NET.mode!=='solo' && !NET.helloDone) netDrop();
+  }, 25000);
+}
+function serializeDeck(){
+  return S.deck.map(m=>({
+    tier:m.tier, type:m.type, name:m.name,
+    url:m.thumb || m.url, // 縮小版があればそちらを送る（通信量削減）
+    maxHp:m.maxHp, atk:m.atk, def:m.def, spd:m.spd,
+    moves:m.moves.map(mv=>({name:mv.name, cat:mv.cat, pow:mv.pow, acc:mv.acc, sub:mv.sub, kind:mv.kind, maxUses:mv.maxUses})),
+  }));
+}
+let _blankUrl = null;
+function blankUrl(){
+  if(_blankUrl) return _blankUrl;
+  const c = document.createElement('canvas'); c.width=400; c.height=400;
+  _blankUrl = c.toDataURL();
+  return _blankUrl;
+}
+const CAT_OK=['atk','def','heal','buff','debuff','status'], SUB_OK=['atk','def','spd'], KIND_OK=['poison','burn','para'];
+/* モンスター1体を復元（ティア範囲にクランプ＝簡易チート対策・保存データ復元兼用） */
+function reviveMon(src, i){
+  src = src||{};
+  const t = TIERS[i];
+  const cl = (v,r)=>Math.max(r[0], Math.min(r[1], Math.round(+v||r[0])));
+  const m = {
+    tier:i, type:Math.max(0, Math.min(4, src.type|0)),
+    name:String(src.name||'ラクガキ').slice(0,20),
+    url:(typeof src.url==='string' && src.url.startsWith('data:image')) ? src.url : blankUrl(),
+    thumb:(typeof src.thumb==='string' && src.thumb.startsWith('data:image')) ? src.thumb : null,
+    maxHp:cl(src.maxHp,t.hp), atk:cl(src.atk,t.atk), def:cl(src.def,t.def), spd:cl(src.spd,t.spd),
+    ko:false, stg:{atk:0,def:0,spd:0}, status:null,
+  };
+  m.hp = m.maxHp;
+  const mvs = (Array.isArray(src.moves)?src.moves.slice(0,4):[]).map(mv=>{
+    if(!mv || !CAT_OK.includes(mv.cat)) return null;
+    const o = {name:String(mv.name||'？？？').slice(0,16), cat:mv.cat};
+    if(mv.cat==='atk'){ o.pow=Math.max(0.5,Math.min(1.6,+mv.pow||1)); o.acc=Math.max(0.5,Math.min(1,+mv.acc||1)); }
+    if(mv.cat==='heal'){ o.maxUses=Math.min(3,Math.max(1,(mv.maxUses|0)||3)); o.uses=o.maxUses; }
+    if(mv.cat==='buff'||mv.cat==='debuff'){ o.sub=SUB_OK.includes(mv.sub)?mv.sub:'atk'; }
+    if(mv.cat==='status'){ o.kind=KIND_OK.includes(mv.kind)?mv.kind:'poison'; }
+    return o;
+  }).filter(Boolean);
+  while(mvs.length<4) mvs.push(mkMove('atk1', MOVE_DB[m.type]));
+  if(mvs[0].cat!=='atk'){
+    const ai = mvs.findIndex(v=>v.cat==='atk');
+    if(ai>0){ const tmp=mvs[0]; mvs[0]=mvs[ai]; mvs[ai]=tmp; }
+    else mvs[0] = mkMove('atk1', MOVE_DB[m.type]);
+  }
+  m.moves = mvs;
+  return m;
+}
+function deserializeDeck(arr){
+  arr = Array.isArray(arr) ? arr : [];
+  return TIERS.map((t,i)=>reviveMon(arr[i], i));
+}
+
+/* --- PvPバトル開始 --- */
+function beginPvpBattle(oppDeck){
+  NET.origNames = S.deck.map(m=>m.name);
+  S.deck.forEach(m=>{
+    m.hp=m.maxHp; m.ko=false; m.stg={atk:0,def:0,spd:0}; m.status=null;
+    m.name = NET.tag+'・'+m.name;
+    m.moves.forEach(mv=>{ if(mv.cat==='heal') mv.uses=mv.maxUses; });
+  });
+  S.eDeck = oppDeck;
+  S.eDeck.forEach(m=>{ m.name = NET.oppTag+'・'+m.name; });
+  S.busy=true; S.inputOn=false; S.turn=0;
+  S.pIdx=0; S.eIdx=0;
+  S.pvpWon=false; S.pvpLost=false; S.actionSent=false; S.replaying=false; S.goQueued=false;
+  NET.pendingHost=null; NET.pendingGuest=null; NET.myStarter=null; NET.oppStarter=null;
+  $('blog').innerHTML='';
+  netStatusHide();
+  show('battle-screen');
+  log(T('pvp_start',{t:NET.tag}));
+  $('hint').textContent='';
+  updateBattleUI();
+  openBench('starter');
+  // ホスト側フォールバック：相手の先発選択が届かなければランダム扱いで強制開始
+  if(NET.mode==='host'){
+    clearTimeout(NET.starterTimer);
+    NET.starterTimer = setTimeout(()=>{
+      if(NET.mode==='host' && NET.oppStarter===null){
+        NET.oppStarter = ri(0,5);
+        maybeStartPvp();
+      }
+    }, (BENCH_LIMIT+5)*1000);
+  }
+}
+function netStarterChosen(idx){
+  if(NET.mode==='guest'){
+    netSend({type:'starter', idx});
+    $('hint').textContent=T('waitStarter');
+  }else{
+    NET.myStarter = idx;
+    $('hint').textContent=T('waitStarter');
+    maybeStartPvp();
+  }
+}
+function maybeStartPvp(){
+  if(NET.mode!=='host' || NET.myStarter===null || NET.oppStarter===null) return;
+  clearTimeout(NET.starterTimer);
+  S.pIdx = NET.myStarter; S.eIdx = NET.oppStarter;
+  log(`👾 あいての先発は ${EM().name}！`);
+  updateBattleUI();
+  netSend({type:'start', snap:makeSnap(null,false,false)});
+  hostGo();
+}
+
+/* --- 状態スナップショット（ホスト→ゲスト同期） --- */
+function makeSnap(end, needA, needB){
+  const ser = deck => deck.map(m=>({hp:m.hp, ko:m.ko, stg:{...m.stg}, status:m.status?{...m.status}:null, heals:m.moves.map(mv=>mv.uses??null)}));
+  return {aIdx:S.pIdx, bIdx:S.eIdx, a:ser(S.deck), b:ser(S.eDeck), end, needA, needB};
+}
+function applySnapGuest(s){
+  // ゲスト視点：自分=b側、あいて=a側
+  S.pIdx = s.bIdx; S.eIdx = s.aIdx;
+  s.b.forEach((x,i)=>{ const m=S.deck[i]; m.hp=x.hp; m.ko=x.ko; m.stg=x.stg; m.status=x.status; m.moves.forEach((mv,j)=>{ if(x.heals[j]!=null) mv.uses=x.heals[j]; }); });
+  s.a.forEach((x,i)=>{ const m=S.eDeck[i]; m.hp=x.hp; m.ko=x.ko; m.stg=x.stg; m.status=x.status; m.moves.forEach((mv,j)=>{ if(x.heals[j]!=null) mv.uses=x.heals[j]; }); });
+}
+
+/* --- 行動の送信・収集 --- */
+function submitAction(act){
+  if(S.busy || !S.inputOn) return;
+  if(act.kind==='move'){
+    const mv = PM().moves[act.i];
+    if(!mv || (mv.cat==='heal' && mv.uses<=0)) return;
+  }
+  closeBench();
+  S.busy=true; setInput(false);
+  $('hint').textContent=T('waitAct');
+  if(NET.mode==='guest'){ S.actionSent=true; netSend({type:'action', act}); }
+  else{ NET.pendingHost = act; tryProcessTurn(); }
+}
+function tryProcessTurn(){
+  if(NET.mode!=='host' || !NET.pendingHost || !NET.pendingGuest) return;
+  const h = NET.pendingHost, g = NET.pendingGuest;
+  NET.pendingHost = null; NET.pendingGuest = null;
+  hostProcessTurn(h, g);
+}
+async function hostProcessTurn(h, g){
+  S.recording = true; S.rec = [];
+  const res = await pvpResolve(h, g);
+  S.recording = false;
+  netSend({type:'turn', logs:S.rec, snap:makeSnap(res.end, res.needA, res.needB)});
+  if(res.end){ res.end==='a' ? winBattle() : loseBattle(); return; }
+  NET.needA = res.needA; NET.needB = res.needB;
+  if(!res.needA && !res.needB){ hostGo(); return; }
+  if(res.needA){
+    openBench('forced'); // 自分がKO→交代を選ぶ
+  }else{
+    // 相手が交代中でも、こちらは次の行動を同時に選べる
+    S.busy=false; setInput(true);
+    $('hint').textContent=T('whatDo');
+  }
+  if(res.needB){
+    // ホスト側フォールバック：相手の交代が届かなければランダム交代で強制続行
+    clearTimeout(NET.replaceTimer);
+    NET.replaceTimer = setTimeout(()=>{
+      if(NET.needB){
+        const alive = S.eDeck.map((m,i)=>m.ko?null:i).filter(i=>i!==null);
+        if(alive.length) onNetData({type:'replace', idx:pick(alive)});
+      }
+    }, (BENCH_LIMIT+5)*1000);
+  }
+}
+function hostGo(){
+  netSend({type:'go'});
+  $('hint').textContent=T('whatDo');
+  S.busy=false; setInput(true);
+}
+
+/* --- ホスト側ターン解決（両者の行動を同時処理） --- */
+async function pvpResolve(hA, gA){
+  S.turn++;
+  if(hA.kind==='switch'){
+    S.pIdx = Math.max(0,Math.min(5,hA.idx|0));
+    PM().stg = {atk:0,def:0,spd:0};
+    log(T('switch_self',{n:PM().name}));
+  }
+  if(gA.kind==='switch'){
+    S.eIdx = Math.max(0,Math.min(5,gA.idx|0));
+    EM().stg = {atk:0,def:0,spd:0};
+    log(T('switch_opp',{n:EM().name}));
+  }
+  updateBattleUI();
+  const hMv = hA.kind==='move' ? PM().moves[hA.i|0] : null;
+  const gMv = gA.kind==='move' ? (EM().moves[gA.i|0] || EM().moves[0]) : null;
+  S.pDef = !!(hMv && hMv.cat==='def');
+  S.eDef = !!(gMv && gMv.cat==='def');
+  if(hMv && gMv){
+    log(T('turn_header',{a:PM().name, x:trMove(hMv.name), b:EM().name, y:trMove(gMv.name)}));
+    const pFirst = effSpd(PM())===effSpd(EM()) ? Math.random()<0.5 : effSpd(PM())>effSpd(EM());
+    const seq = pFirst ? [['p',hMv],['e',gMv]] : [['e',gMv],['p',hMv]];
+    for(const [side, mv] of seq){
+      const actor = side==='p' ? PM() : EM();
+      if(actor.ko) continue;
+      await sleep(500);
+      await execMove(side, mv);
+      updateBattleUI();
+      pvpKoMark();
+      if(pvpEnded()) return pvpResult();
+    }
+  }else if(hMv){
+    await sleep(400); await execMove('p', hMv);
+  }else if(gMv){
+    await sleep(400); await execMove('e', gMv);
+  }
+  updateBattleUI();
+  pvpKoMark();
+  if(pvpEnded()) return pvpResult();
+  await sleep(300);
+  endOfTurnTicks();
+  updateBattleUI();
+  pvpKoMark();
+  return pvpResult();
+}
+function pvpKoMark(){
+  const pM = PM(), eM = EM();
+  if(eM.hp<=0 && !eM.ko){ eM.hp=0; eM.ko=true; log(T('ko_pvp',{n:eM.name})); sfx.ko(); }
+  if(pM.hp<=0 && !pM.ko){ pM.hp=0; pM.ko=true; log(T('ko_mine',{n:pM.name})); sfx.ko(); }
+  updateBattleUI();
+}
+function pvpEnded(){ return aliveCount(S.deck)===0 || aliveCount(S.eDeck)===0; }
+function pvpResult(){
+  if(aliveCount(S.eDeck)===0) return {end:'a', needA:false, needB:false};
+  if(aliveCount(S.deck)===0)  return {end:'b', needA:false, needB:false};
+  return {end:null, needA:PM().ko, needB:EM().ko};
+}
+/* --- KO後の交代（PvP） --- */
+function netForcedChosen(idx){
+  updateBattleUI();
+  if(NET.mode==='guest'){
+    S.actionSent = false;
+    netSend({type:'replace', idx});
+    $('hint').textContent='⌛';
+  }else{
+    log(T('go_mon',{n:PM().name}));
+    netSend({type:'replaced', side:'a', idx});
+    NET.needA = false;
+    // 交代したらすぐ次の行動を選べる（相手の状況を待たない＝同時選択）
+    S.busy=false; setInput(true);
+    $('hint').textContent=T('whatDo');
+    if(!NET.needB) netSend({type:'go'}); // 相手は交代不要→行動選択を開始してもらう
+  }
+}
+
+/* --- 受信ハンドラ --- */
+async function onNetData(msg){
+  try{ await onNetDataInner(msg); }
+  catch(e){ console.error('[rakugaki] 受信処理エラー:', msg && msg.type, e); }
+}
+async function onNetDataInner(msg){
+  if(!msg || typeof msg !== 'object') return;
+  switch(msg.type){
+    case 'hello':
+      if(NET.helloDone) break; // 二重受信ガード
+      NET.helloDone = true;
+      clearTimeout(NET.helloTimer);
+      beginPvpBattle(deserializeDeck(msg.deck));
+      break;
+    case 'starter': // host専用
+      if(NET.mode!=='host') break;
+      NET.oppStarter = Math.max(0, Math.min(5, msg.idx|0));
+      maybeStartPvp();
+      break;
+    case 'start': // guest専用
+      applySnapGuest(msg.snap);
+      log(T('opp_starter',{n:EM().name}));
+      updateBattleUI();
+      break;
+    case 'go':
+      if(S.actionSent) break; // すでにこのターンの行動は送信済み
+      if(S.replaying){ S.goQueued=true; break; } // ログ再生が終わってから有効化
+      $('hint').textContent=T('whatDo');
+      S.busy=false; setInput(true);
+      break;
+    case 'action': // host専用
+      if(NET.mode!=='host') break;
+      NET.pendingGuest = msg.act;
+      tryProcessTurn();
+      break;
+    case 'turn': { // guest専用：ホストの解決結果を再生
+      S.busy=true; setInput(false); S.actionSent=false; S.replaying=true;
+      for(const line of (msg.logs||[])){ log(String(line)); await sleep(350); }
+      applySnapGuest(msg.snap);
+      updateBattleUI();
+      S.replaying=false;
+      if(msg.snap.end){ msg.snap.end==='b' ? winBattle() : loseBattle(); break; }
+      if(msg.snap.needB){
+        openBench('forced'); // 自分がKO→交代を選ぶ
+      }else if(msg.snap.needA){
+        // 相手が交代中でも、こちらは次の行動を同時に選べる
+        S.busy=false; setInput(true);
+        $('hint').textContent=T('whatDo');
+      }else if(S.goQueued){
+        S.goQueued=false;
+        S.busy=false; setInput(true);
+        $('hint').textContent=T('whatDo');
+      }
+      break;
+    }
+    case 'replace': // host専用：ゲストのKO後交代
+      if(NET.mode!=='host') break;
+      clearTimeout(NET.replaceTimer);
+      S.eIdx = Math.max(0, Math.min(5, msg.idx|0));
+      EM().stg = {atk:0,def:0,spd:0};
+      log(T('send_next2',{n:EM().name}));
+      updateBattleUI();
+      netSend({type:'replaced', side:'b', idx:S.eIdx});
+      NET.needB = false;
+      netSend({type:'go'}); // 交代を終えた相手に行動選択を開始してもらう
+      // ホスト側の入力はすでに有効（相手の交代中に選択可能）なので何もしない
+      break;
+    case 'replaced': // guest専用
+      if(msg.side==='a'){
+        S.eIdx = Math.max(0, Math.min(5, msg.idx|0));
+        S.eDeck[S.eIdx].stg = {atk:0,def:0,spd:0};
+        log(T('send_next2',{n:EM().name}));
+      }
+      updateBattleUI();
+      break;
+    case 'steal': { // 敗者側：モンスターを取られる
+      if(!S.pvpLost) break;
+      S.pvpLost = false;
+      netStatusHide();
+      const tier = msg.tier|0;
+      if(tier < 0){ // 勝者は何もうばわなかった
+        overlay(T('safeTitle'), T('safeText'), T('backDeck'), netExitToDeck);
+        break;
+      }
+      const t = Math.max(0, Math.min(5, tier));
+      const victim = S.deck[t]; // バトルに出していた選択中のコ
+      const nm = baseName(victim);
+      const arr = S.stock[t];
+      const ix = arr.indexOf(victim);
+      if(ix >= 0){
+        arr.splice(ix, 1);
+        const sel = S.deckSel[t];
+        if(sel!=null){
+          if(sel===ix) S.deckSel[t] = arr.length ? 0 : null;
+          else if(sel>ix) S.deckSel[t] = sel-1;
+        }
+        saveStock();
+      }
+      overlay(T('stolenTitle'), T('stolenText',{n:nm}), T('backDeck'), netExitToDeck);
+      break;
+    }
+  }
+}
+
+/* --- 強奪（勝者側） --- */
+function openStealPicker(){
+  $('pick-title').textContent = T('stealTitle');
+  const g = $('pick-grid'); g.innerHTML='';
+  S.eDeck.forEach((m,i)=>{
+    const d = document.createElement('div');
+    d.className = 'slot';
+    d.innerHTML = monCard(m);
+    d.addEventListener('click', ()=>doSteal(i));
+    g.appendChild(d);
+  });
+  const pc = $('pick-cancel');
+  pc.style.display = '';
+  pc.textContent = T('mercyBtn');
+  pc.onclick = ()=>{
+    $('pick-overlay').classList.remove('show');
+    netSend({type:'steal', tier:-1});
+    overlay(T('mercyTitle'), T('mercyText1'), T('backDeck'), netExitToDeck);
+  };
+  $('pick-overlay').classList.add('show');
+}
+function doSteal(idx){
+  $('pick-overlay').classList.remove('show');
+  const src = S.eDeck[idx];
+  const stolen = reviveMon({
+    type:src.type, name:baseName(src), url:src.url,
+    maxHp:src.maxHp, atk:src.atk, def:src.def, spd:src.spd, moves:src.moves,
+  }, src.tier);
+  const arr = S.stock[src.tier];
+  const finish = ()=>{
+    netSend({type:'steal', tier:src.tier});
+    saveStock();
+    overlay(T('gotTitle'), T('gotText',{n:stolen.name, min:TIERS[src.tier].min}), T('backDeck'), netExitToDeck);
+  };
+  if(arr.length >= STOCK_MAX){
+    // 満杯→入れ替え
+    $('pick-title').textContent = T('replaceFull',{min:TIERS[src.tier].min});
+    const g = $('pick-grid'); g.innerHTML='';
+    arr.forEach((m,i)=>{
+      const d = document.createElement('div');
+      d.className = 'slot';
+      d.innerHTML = monCard(m, S.deckSel[src.tier]===i?'<br>'+T('inDeck'):'');
+      d.addEventListener('click', ()=>{
+        $('pick-overlay').classList.remove('show');
+        arr[i] = stolen;
+        finish();
+      });
+      g.appendChild(d);
+    });
+    const pc = $('pick-cancel');
+    pc.style.display = '';
+    pc.textContent = T('replaceCancel');
+    pc.onclick = ()=>{
+      $('pick-overlay').classList.remove('show');
+      netSend({type:'steal', tier:-1});
+      overlay(T('mercyTitle'), T('mercyText2'), T('backDeck'), netExitToDeck);
+    };
+    $('pick-overlay').classList.add('show');
+  }else{
+    arr.push(stolen);
+    if(S.deckSel[src.tier]==null) S.deckSel[src.tier] = arr.length-1;
+    finish();
+  }
+}
+
+/* ============ 起動時：保存データ・言語読み込み ============ */
+try{ const sl = localStorage.getItem('rkgk-lang'); if(sl && I18N[sl]) LANG = sl; }catch(e){}
+applyLang();
+loadStock();
+rebuildDeck();
+</script>
+</body>
+</html>
