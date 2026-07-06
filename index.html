@@ -148,8 +148,9 @@ button.primary{background:#f5d90a; font-size:19px; padding:13px 26px;}
       <button class="langbtn" data-lang="de" onclick="setLang('de')">Deutsch</button>
     </div>
     <div class="wobble" style="font-size:14px; line-height:1.9;" id="rules-box"></div>
-    <div class="center" style="margin-top:16px;">
+    <div class="center" style="margin-top:16px; display:flex; gap:8px; justify-content:center; flex-wrap:wrap;">
       <button class="primary" id="mkdeck-btn" onclick="show('deck-screen'); renderDeck();">✏️ デッキをつくる</button>
+      <button id="chart-btn" onclick="openTypeChart()">📊 タイプ相性表</button>
     </div>
   </div>
 
@@ -163,6 +164,7 @@ button.primary{background:#f5d90a; font-size:19px; padding:13px 26px;}
       <button id="free-btn" onclick="startOnline('free')" disabled>🌐 フリー対戦</button>
       <button id="friend-btn" onclick="startOnline('friend')" disabled>🤝 友人対戦</button>
       <button id="reset-btn" onclick="resetDeck()">🗑️ 全ストック削除</button>
+      <button onclick="openTypeChart()">📊</button>
     </div>
   </div>
 
@@ -194,6 +196,7 @@ button.primary{background:#f5d90a; font-size:19px; padding:13px 26px;}
   <div id="battle-screen" class="screen">
     <div id="battle-top">
       <span class="badge" id="b-score-p">きみ 6/6</span>
+      <button onclick="openTypeChart()" style="font-size:12px; padding:2px 10px;">📊</button>
       <span class="badge" id="b-score-e">あいて 6/6</span>
     </div>
     <div class="bench" id="p-bench"></div>
@@ -290,6 +293,17 @@ button.primary{background:#f5d90a; font-size:19px; padding:13px 26px;}
     </div>
   </div>
 
+  <!-- タイプ相性図 -->
+  <div id="chart-overlay" class="ovl">
+    <div class="ovl-box wobble">
+      <div id="chart-title" style="font-size:20px; margin-bottom:4px;">📊</div>
+      <div id="chart-svg"></div>
+      <div id="chart-mutual" style="font-size:13px; margin:2px 0 6px;"></div>
+      <div id="chart-legend" style="font-size:12px; line-height:1.7; margin-bottom:12px; text-align:left;"></div>
+      <button id="chart-close" onclick="document.getElementById('chart-overlay').classList.remove('show')">閉じる</button>
+    </div>
+  </div>
+
   <!-- 汎用ピッカー（強奪・入れ替え） -->
   <div id="pick-overlay" class="ovl">
     <div class="ovl-box wobble">
@@ -339,6 +353,9 @@ ja:{
   renamePrompt:'あたらしい名前は？（14文字まで）', stockClose:'とじる',
   benchStarter:'先発モンスターを選ぼう！', benchForced:'つぎのモンスターを選ぼう！', benchSwitch:'だれとこうたいする？', benchCancel:'やめる',
   timeLeft:'のこり{s}秒', autoPick:'⏰ 時間切れ！自動で選ばれた！',
+  chartBtn:'📊 タイプ相性表', chartTitle:'📊 タイプ相性図',
+  chartLegend:'矢印の向き＝<b>得意</b>：与えるダメージ約1.7倍＆その相手からの被ダメージ減。<br>逆方向は<b>不得意</b>：与ダメ減＆被ダメ増（約0.56倍しか通らない）。',
+  chartMutual:'🌑と✨は おたがいに弱点！',
   scoreYou:'きみ {n}/6', scoreOpp:'あいて {n}/6', nameMin:'{n}（{min}分）',
   btnSwitch:'🔄 こうたい（ターンを消費する）',
   hint_atk:'👀 {n} から殺気を感じる…！', hint_def:'👀 {n} は身構えているようだ…', hint_heal:'👀 {n} は傷を気にしている…',
@@ -409,6 +426,9 @@ en:{
   renamePrompt:'New name? (max 14 chars)', stockClose:'Close',
   benchStarter:'Choose your starter!', benchForced:'Choose your next monster!', benchSwitch:'Switch with whom?', benchCancel:'Cancel',
   timeLeft:'{s}s left', autoPick:'⏰ Time\'s up! Auto-picked!',
+  chartBtn:'📊 Type Chart', chartTitle:'📊 Type Chart',
+  chartLegend:'Arrow direction = <b>advantage</b>: ~1.7× damage dealt & reduced damage taken from that type.<br>Reverse direction = <b>disadvantage</b>: less damage dealt & more taken (only ~0.56× gets through).',
+  chartMutual:'🌑 and ✨ are weak to each other!',
   scoreYou:'You {n}/6', scoreOpp:'Rival {n}/6', nameMin:'{n} ({min}m)',
   btnSwitch:'🔄 Switch (uses your turn)',
   hint_atk:'👀 {n} is radiating bloodlust…!', hint_def:'👀 {n} seems to be bracing…', hint_heal:'👀 {n} is checking its wounds…',
@@ -479,6 +499,9 @@ zh:{
   renamePrompt:'新名字？（最多14字）', stockClose:'关闭',
   benchStarter:'选择首发怪兽！', benchForced:'选择下一只怪兽！', benchSwitch:'和谁交换？', benchCancel:'取消',
   timeLeft:'剩{s}秒', autoPick:'⏰ 时间到！已自动选择！',
+  chartBtn:'📊 属性相克表', chartTitle:'📊 属性相克图',
+  chartLegend:'箭头方向＝<b>克制</b>：造成约1.7倍伤害，且受该属性的伤害减少。<br>反方向＝<b>被克制</b>：伤害减少、受伤增加（只能打出约0.56倍）。',
+  chartMutual:'🌑与✨互为弱点！',
   scoreYou:'你 {n}/6', scoreOpp:'对手 {n}/6', nameMin:'{n}（{min}分）',
   btnSwitch:'🔄 交换（消耗回合）',
   hint_atk:'👀 感到{n}杀气腾腾…！', hint_def:'👀 {n}似乎在防备…', hint_heal:'👀 {n}在意伤势…',
@@ -549,6 +572,9 @@ ko:{
   renamePrompt:'새 이름은? (14자까지)', stockClose:'닫기',
   benchStarter:'선봉 몬스터를 고르자!', benchForced:'다음 몬스터를 고르자!', benchSwitch:'누구와 교체할까?', benchCancel:'취소',
   timeLeft:'남은 {s}초', autoPick:'⏰ 시간 초과! 자동으로 선택됐다!',
+  chartBtn:'📊 타입 상성표', chartTitle:'📊 타입 상성도',
+  chartLegend:'화살표 방향＝<b>유리</b>: 주는 데미지 약 1.7배 & 그 타입에게 받는 데미지 감소.<br>반대 방향은 <b>불리</b>: 주는 데미지 감소 & 받는 데미지 증가(약 0.56배밖에 안 통함).',
+  chartMutual:'🌑와 ✨는 서로 약점!',
   scoreYou:'나 {n}/6', scoreOpp:'상대 {n}/6', nameMin:'{n}（{min}분）',
   btnSwitch:'🔄 교체（턴을 소비）',
   hint_atk:'👀 {n}에게서 살기가 느껴진다…!', hint_def:'👀 {n}은(는) 방어 태세인 것 같다…', hint_heal:'👀 {n}이(가) 상처를 신경 쓰고 있다…',
@@ -619,6 +645,9 @@ de:{
   renamePrompt:'Neuer Name? (max. 14 Zeichen)', stockClose:'Schließen',
   benchStarter:'Wähle deinen Starter!', benchForced:'Wähle das nächste Monster!', benchSwitch:'Mit wem tauschen?', benchCancel:'Abbrechen',
   timeLeft:'noch {s}s', autoPick:'⏰ Zeit um! Automatisch gewählt!',
+  chartBtn:'📊 Typen-Tabelle', chartTitle:'📊 Typen-Diagramm',
+  chartLegend:'Pfeilrichtung = <b>Vorteil</b>: ≈1,7× Schaden & weniger Schaden von diesem Typ.<br>Gegenrichtung = <b>Nachteil</b>: weniger Schaden ausgeteilt & mehr erlitten (nur ≈0,56× kommt durch).',
+  chartMutual:'🌑 und ✨ sind gegenseitig schwach!',
   scoreYou:'Du {n}/6', scoreOpp:'Gegner {n}/6', nameMin:'{n} ({min}m)',
   btnSwitch:'🔄 Wechseln (kostet den Zug)',
   hint_atk:'👀 {n} strahlt Kampflust aus…!', hint_def:'👀 {n} scheint sich zu wappnen…', hint_heal:'👀 {n} achtet auf seine Wunden…',
@@ -758,6 +787,8 @@ function applyLang(){
   set('subtitle-el', T('subtitle'));
   set('rules-box', T('rules'));
   set('mkdeck-btn', T('mkdeck'));
+  set('chart-btn', T('chartBtn'));
+  set('chart-close', T('closeBtn'));
   set('deck-h2', T('deckTitle'));
   set('deck-sub', T('deckSub'));
   set('battle-btn', T('btnAI'));
@@ -799,10 +830,16 @@ const TYPES = [
   {icon:'🌑', name:'やみ'},
   {icon:'✨', name:'ひかり'},
 ];
+/* 相性は攻防両面に効く：
+   得意な相手 → 攻撃補正×1.3 ＋ 相手の防御弱体×1.3 ＝ 約1.7倍
+   不得意な相手 → 攻撃減×0.75 ＋ 相手の防御強化×0.75 ＝ 約0.56倍
+   🔥>🌿, 🌿>💧, 💧>🔥。🌑⇔✨は相互弱点（お互い1.7倍） */
+function beats(a, d){
+  return (a===0&&d===2)||(a===2&&d===1)||(a===1&&d===0)||(a===3&&d===4)||(a===4&&d===3);
+}
 function typeMult(a, d){
-  if((a===0&&d===2)||(a===2&&d===1)||(a===1&&d===0)) return 1.5;
-  if((a===2&&d===0)||(a===1&&d===2)||(a===0&&d===1)) return 0.65;
-  if((a===3&&d===4)||(a===4&&d===3)) return 1.5;
+  if(beats(a,d)) return 1.69;   // 1.3(攻撃UP) × 1.3(相手の防御DOWN)
+  if(beats(d,a)) return 0.5625; // 0.75(攻撃DOWN) × 0.75(相手の防御UP)
   return 1;
 }
 const COLOR_TYPE   = [3,0,1,2,0,3,4,4,1,2];
@@ -2429,6 +2466,45 @@ function doSteal(idx){
     if(S.deckSel[src.tier]==null) S.deckSel[src.tier] = arr.length-1;
     finish();
   }
+}
+
+/* ============ タイプ相性図 ============ */
+function openTypeChart(){
+  $('chart-title').textContent = T('chartTitle');
+  $('chart-mutual').textContent = T('chartMutual');
+  $('chart-legend').innerHTML = T('chartLegend');
+  $('chart-close').textContent = T('closeBtn');
+  // ノード位置：🔥上、🌿左下、💧右下（三すくみ）＋ 🌑✨（相互弱点）
+  const pos = {0:[150,55], 2:[75,185], 1:[225,185], 3:[95,290], 4:[205,290]};
+  const col = {0:'#e74c3c', 1:'#2980d9', 2:'#27ae60', 3:'#555555', 4:'#d4a900'};
+  const arrow = (f, t, double)=>{
+    const [x1,y1] = pos[f], [x2,y2] = pos[t];
+    // ノードの半径ぶん縮める
+    const dx=x2-x1, dy=y2-y1, len=Math.hypot(dx,dy);
+    const r=34;
+    const sx=x1+dx/len*r, sy=y1+dy/len*r, ex=x2-dx/len*r, ey=y2-dy/len*r;
+    return `<line x1="${sx}" y1="${sy}" x2="${ex}" y2="${ey}" stroke="${col[f]}" stroke-width="4.5"
+      stroke-linecap="round" marker-end="url(#ah)" ${double?'marker-start="url(#ah)"':''}/>`;
+  };
+  const node = i=>{
+    const [x,y] = pos[i];
+    return `<g>
+      <circle cx="${x}" cy="${y}" r="27" fill="#fff" stroke="#2b2b2b" stroke-width="3"/>
+      <text x="${x}" y="${y+7}" font-size="24" text-anchor="middle">${TYPES[i].icon}</text>
+      <text x="${x}" y="${y+45}" font-size="12" text-anchor="middle" fill="#2b2b2b" font-family="inherit">${typeName(i)}</text>
+    </g>`;
+  };
+  $('chart-svg').innerHTML = `
+    <svg viewBox="0 0 300 345" style="max-width:300px; width:100%;">
+      <defs>
+        <marker id="ah" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="5" markerHeight="5" orient="auto-start-reverse">
+          <path d="M0,0 L10,5 L0,10 z" fill="#2b2b2b"/>
+        </marker>
+      </defs>
+      ${arrow(0,2)}${arrow(2,1)}${arrow(1,0)}${arrow(3,4,true)}
+      ${node(0)}${node(1)}${node(2)}${node(3)}${node(4)}
+    </svg>`;
+  $('chart-overlay').classList.add('show');
 }
 
 /* ============ 起動時：保存データ・言語読み込み ============ */
