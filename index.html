@@ -878,7 +878,7 @@ function typeMult(a, d){
   return 1;
 }
 const COLOR_TYPE   = [3,0,1,2,0,3,4,4,1,2];
-const COLOR_WEIGHT = [0.5,1,1,1,1,1,1,1,1,1];
+const COLOR_WEIGHT = [0.35,1,1,1,1,1,1,1,1,1]; // くろは輪郭線用途が多いので票を軽く
 const NAME_A = ['モ','ギャ','ズン','ピ','ドロ','ベロ','グラ','ケケ','ボン','ムニ','ザラ','ペチ'];
 const NAME_B = ['ちゃん','ぞう','りん','ゴン','ペン','たろう','キング','じい','まる','ヌス'];
 
@@ -1388,9 +1388,75 @@ function renderPalette(){
 }
 
 /* ============ 絵の解析 ============ */
+/* 形状特徴の抽出（100×100の占有グリッドから） */
+function shapeFeatures(occ, G){
+  let area=0, perim=0, minX=G, maxX=-1, minY=G, maxY=-1;
+  const tipsY = [];
+  const at = (x,y)=> (x>=0 && y>=0 && x<G && y<G) ? occ[y*G+x] : 0;
+  for(let y=0; y<G; y++){
+    for(let x=0; x<G; x++){
+      if(!occ[y*G+x]) continue;
+      area++;
+      if(x<minX)minX=x; if(x>maxX)maxX=x; if(y<minY)minY=y; if(y>maxY)maxY=y;
+      const n = at(x-1,y)+at(x+1,y)+at(x,y-1)+at(x,y+1);
+      if(n < 4) perim++;
+      if(n <= 1) tipsY.push(y); // 端点＝トゲ・枝の先っぽ（位置も記録）
+    }
+  }
+  // 連結成分数（パーツの散らばり）
+  const seen = new Uint8Array(G*G);
+  let comps = 0;
+  for(let s=0; s<G*G; s++){
+    if(!occ[s] || seen[s]) continue;
+    comps++;
+    const stack=[s]; seen[s]=1;
+    while(stack.length){
+      const p=stack.pop(), x=p%G, y=(p-x)/G;
+      for(const q of [p-1,p+1,p-G,p+G]){
+        const qx=q%G, qy=(q-qx)/G;
+        if(q>=0 && q<G*G && Math.abs(qx-x)+Math.abs(qy-y)===1 && occ[q] && !seen[q]){ seen[q]=1; stack.push(q); }
+      }
+    }
+  }
+  const bw = maxX-minX+1, bh = maxY-minY+1;
+  const cy = (minY+maxY)/2;
+  const tips = tipsY.length;
+  const up = tipsY.filter(y=>y<cy).length, down = tips-up;
+  // 角度別の最大半径プロファイル：山谷の交代回数＝放射状のギザギザ（星・炎）
+  let sx=0, sy=0;
+  for(let y=0; y<G; y++) for(let x=0; x<G; x++) if(occ[y*G+x]){ sx+=x; sy+=y; }
+  const gx = sx/Math.max(1,area), gy = sy/Math.max(1,area);
+  const BINS = 36;
+  const maxR = new Array(BINS).fill(0);
+  for(let y=0; y<G; y++) for(let x=0; x<G; x++){
+    if(!occ[y*G+x]) continue;
+    const dx=x-gx, dy=y-gy, r=Math.hypot(dx,dy);
+    const b=((Math.floor((Math.atan2(dy,dx)+Math.PI)/(2*Math.PI)*BINS))+BINS)%BINS;
+    if(r>maxR[b]) maxR[b]=r;
+  }
+  const rs=[...maxR].sort((a,b)=>a-b), med=rs[Math.floor(BINS/2)]||1;
+  let transitions=0;
+  for(let b=0; b<BINS; b++){
+    const hi1 = maxR[b] > med*1.2, hi2 = maxR[(b+1)%BINS] > med*1.2;
+    if(hi1!==hi2) transitions++;
+  }
+  const spikeAng = clamp01((transitions-3)/12); // 放射状トゲトゲ度
+  const dens = clamp01(area/(bw*bh));                                  // 詰まり具合
+  const tall = clamp01((bh/Math.max(1,bw) - 0.9)/1.1);                 // 縦長さ
+  const C = perim*perim/(4*Math.PI*Math.max(1,area));                  // 輪郭の粗さ（円=1）
+  const spike = clamp01((tips - comps*1.5)/(comps*6));                 // トゲトゲ度（端点の多さ）
+  const radial = clamp01(Math.min(up,down)*2/Math.max(1,tips));        // 全方向に尖る＝炎・星
+  const upness = clamp01((up-down)/Math.max(1,tips));                  // 上向きに伸びる＝植物
+  const roundC = clamp01(1-(C-1.5)/6) * clamp01(dens*1.6);             // 丸み×詰まり
+  const scatter = clamp01((comps-1)/6);                                // 散らばり
+  const bulk = clamp01(dens*0.6 + clamp01(area/(G*G)*3)*0.4);          // どっしり感
+  return {dens, tall, spike, spikeAng, radial, upness, roundC, scatter, bulk};
+}
 function analyzeArt(ctx){
   const img = ctx.getImageData(0,0,400,400).data;
   const colorCount = new Array(PALETTE.length).fill(0);
+  const G = 100;
+  const occ = new Uint8Array(G*G); // 4px間引きの占有グリッド
   let covered=0, total=0, minX=400, maxX=-1, minY=400, maxY=-1;
   for(let y=0; y<400; y+=4){
     for(let x=0; x<400; x+=4){
@@ -1398,6 +1464,7 @@ function analyzeArt(ctx){
       const i = (y*400+x)*4;
       if(img[i+3] > 30){
         covered++;
+        occ[(y>>2)*G + (x>>2)] = 1;
         if(x<minX)minX=x; if(x>maxX)maxX=x; if(y<minY)minY=y; if(y>maxY)maxY=y;
         let best=0, bd=1e9;
         for(let c=0; c<PALETTE.length; c++){
@@ -1412,10 +1479,23 @@ function analyzeArt(ctx){
   if(covered === 0){
     return {type:ri(0,4), weights:{hp:.5,atk:.5,def:.5,spd:.5}, reason:'reason_blank'};
   }
-  const typeScore = new Array(TYPES.length).fill(0);
-  colorCount.forEach((n,c)=> typeScore[COLOR_TYPE[c]] += n * COLOR_WEIGHT[c]);
+  /* --- タイプ判定：形状55%＋色45%の総合評価 --- */
+  const colorScore = new Array(TYPES.length).fill(0);
+  colorCount.forEach((n,c)=> colorScore[COLOR_TYPE[c]] += n * COLOR_WEIGHT[c]);
+  const cShare = colorScore.map(v=>v/covered); // 黒の割引を保ったままの色シェア
+  const f = shapeFeatures(occ, G);
+  const sScore = [
+    f.spikeAng*0.45 + f.spike*0.10 + f.radial*0.05 + (1-f.scatter)*0.05, // 🔥 放射状にトゲトゲ（星・炎）
+    f.roundC*0.55 + (1-f.spike)*0.15,                                // 💧 丸くなめらかで詰まった水滴
+    f.tall*0.30 + f.spike*0.15 + (1-f.dens)*0.15 + f.upness*0.15,    // 🌿 上に伸びる枝分かれ・スカスカ
+    f.bulk*0.55 + (1-f.scatter)*0.10,                                // 🌑 どっしり大きな一塊
+    f.scatter*0.55 + (1-f.dens)*0.25 + f.spike*0.20,                 // ✨ 小さなパーツがキラキラ散らばる
+  ];
   let type = 0, ts = -1;
-  typeScore.forEach((v,i)=>{ if(v>ts){ts=v; type=i;} });
+  for(let i=0; i<TYPES.length; i++){
+    const v = 0.45*cShare[i] + 0.55*sScore[i];
+    if(v > ts){ ts = v; type = i; }
+  }
   const covRatio = covered/total;
   const bboxArea = (maxX-minX+4)*(maxY-minY+4);
   const bboxRatio = bboxArea/(400*400);
